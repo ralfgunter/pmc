@@ -38,7 +38,7 @@
 #define LIN2D(x,y,max_x) ((x) + (y) * (max_x))
 #define LIN3D(x,y,z,max_x,max_y) (LIN2D((x),(y),(max_x)) + (z) * ((max_x) * (max_y)))
 
-#define DIST2VOX(x,s) ((int)((x)/(s)))
+#define DIST2VOX(x, sr) ((int) ((x) * (sr)))
 
 typedef float Real; // ideally this should be configurable.
 typedef unsigned int uint;
@@ -48,16 +48,16 @@ typedef unsigned int uint;
 #define RAND_SEED_LEN 5     // 32bit seed length (32*5 = 160bits)
 
 typedef struct {
-    char ***tissueType;         // type of the tissue within the voxel
-    int dim_x, dim_y, dim_z;    // dimensions of the image file
-    Real xstep, ystep, zstep;   // voxel dimensions
+    char ***tissueType;           // type of the tissue within the voxel
+    int dim_x, dim_y, dim_z;      // dimensions of the image file
+    Real xstepr, ystepr, zstepr;  // inverse of voxel dimensions
     Real minstepsize;
 
     // Apparently this restricts the photon fluence calculation to within
     // a box outlined by the following coordinates.
-    Real Ixmin, Ixmax;
-    Real Iymin, Iymax;
-    Real Izmin, Izmax;
+    int Ixmin, Ixmax;
+    int Iymin, Iymax;
+    int Izmin, Izmax;
 
     // TODO: find better names
     int nIxstep, nIystep, nIzstep;

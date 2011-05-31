@@ -197,9 +197,9 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     sim->grid.dim_x = dim_x;
     sim->grid.dim_y = dim_y;
     sim->grid.dim_z = dim_z;
-    sim->grid.xstep = xstep;
-    sim->grid.ystep = ystep;
-    sim->grid.zstep = zstep;
+    sim->grid.xstepr = 1.0 / xstep; // as with tmusr
+    sim->grid.ystepr = 1.0 / ystep; // as with tmusr
+    sim->grid.zstepr = 1.0 / zstep; // as with tmusr
     sim->grid.nIxstep = nIxstep;
     sim->grid.nIystep = nIystep;
     sim->grid.nIzstep = nIzstep;
@@ -252,8 +252,6 @@ void write_results(Simulation sim, const char *input_filename)
             {
                 if(bitset_get(sim.detHit, photonIndex, i) == 1)
                 {
-                    printf("(i, photonIndex) = (%d, %d)\n", i, photonIndex);
-
                     // Write to the history file
                     fwrite(&i, sizeof(int), 1, history);
                     for( j = 1; j <= sim.tiss.num; j++ )

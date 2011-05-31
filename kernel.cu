@@ -19,8 +19,13 @@
 #include "logistic_rand_kernel.h"
 #include "bitset2d_kernel.h"
 
+#define timed_LIN3D(i,j,k,time,grid) (time * grid.nIxyz + \
+                                      ((k) - grid.Izmin) * grid.nIxy + \
+                                      ((j) - grid.Iymin) * grid.nIxstep + \
+                                      ((i) - grid.Ixmin))
+
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(Real *t, Real *tg, float *momTiss, char tissueIndex, float3 *d)
+__device__ void henyey_greenstein(Real *t, Real *tg, float *momTiss, char tissueIndex, int photonIndex, int n_photons, float3 *d)
 {
     float3 d0;
 
@@ -52,7 +57,7 @@ __device__ void henyey_greenstein(Real *t, Real *tg, float *momTiss, char tissue
     }
 
     if(theta > 0)
-        momTiss[LIN3D(threadIdx.x,blockIdx.x,tissueIndex,blockDim.x,gridDim.x)] += 1 - ctheta;
+        momTiss[LIN2D(photonIndex, tissueIndex, n_photons)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -101,45 +106,39 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     int3 p;
     // TODO: The *step are also used only for division operations;
     //       Find out if they should receive the same treatment as stepLr.
-    p.x = DIST2VOX(r.x, s.grid.xstep);
-    p.y = DIST2VOX(r.y, s.grid.ystep);
-    p.z = DIST2VOX(r.z, s.grid.zstep);
+    p.x = DIST2VOX(r.x, s.grid.xstepr);
+    p.y = DIST2VOX(r.y, s.grid.ystepr);
+    p.z = DIST2VOX(r.z, s.grid.zstepr);
 
     // Loop until photon has exceeded its max distance allowed, or escapes
     // the grid.
-    while ( dist < s.max_length &&
-            p.x >= 0 && p.x < s.grid.dim_x &&
-            p.y >= 0 && p.y < s.grid.dim_y &&
-            p.z >= 0 && p.z < s.grid.dim_z &&
-            (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)]) != 0 ) {
+    while( dist < s.max_length &&
+           p.x >= 0 && p.x < s.grid.dim_x &&
+           p.y >= 0 && p.y < s.grid.dim_y &&
+           p.z >= 0 && p.z < s.grid.dim_z &&
+           (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)]) != 0 )
+    {
+        rand_need_more(t, tnew);
 
         // Calculate scattering length
-        rand_need_more(t, tnew);
         Lresid = rand_next_scatlen(t);
 
         while( dist < s.max_length && Lresid > 0.0 &&
                p.x >= 0 && p.x < s.grid.dim_x &&
                p.y >= 0 && p.y < s.grid.dim_y &&
                p.z >= 0 && p.z < s.grid.dim_z &&
-               (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)]) != 0 ) {
-
-            /*
-            g.II[10] = dist;
-            g.II[11] = time;
-            g.II[12] = Lnext;
-            */
-
+               (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)]) != 0 )
+        {
             if(dist > Lnext && dist > s.min_length)
             {
                 time = (int) ((dist - s.min_length) * s.stepLr);
-                //g.II[11] = time;
+
                 if ( p.x >= s.grid.Ixmin && p.x <= s.grid.Ixmax &&
                      p.y >= s.grid.Iymin && p.y <= s.grid.Iymax &&
                      p.z >= s.grid.Izmin && p.z <= s.grid.Izmax &&
-                     time < s.max_time)
-                {
-                    g.II[LIN3D(p.x,p.y,p.z,s.grid.dim_x,s.grid.dim_y)] += P2pt;
-                }
+                     time < s.max_time )
+                     g.II[timed_LIN3D(p.x, p.y, p.z, time, s.grid)] += P2pt;
+
                 Lnext += s.grid.minstepsize;
             }
 
@@ -159,49 +158,28 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
             dist += step;
 
             P2pt *= exp(-(g.tmua[tissueIndex]) * step);
-            g.lenTiss[LIN2D(photonIndex, tissueIndex, blockDim.x * gridDim.x)] += step;
+            g.lenTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += step;
 
-            /*
-            g.II[0] = p.x;
-            g.II[1] = p.y;
-            g.II[2] = p.z;
-            g.II[3] = d.x;
-            g.II[4] = d.y;
-            g.II[5] = d.z;
-            g.II[6] = musr;
-            g.II[7] = tissueIndex;
-            g.II[8] = photonIndex;
-            g.II[9] = Lresid;
-            */
-
-            p.x = DIST2VOX(r.x, s.grid.xstep);
-            p.y = DIST2VOX(r.y, s.grid.ystep);
-            p.z = DIST2VOX(r.z, s.grid.zstep);
+            p.x = DIST2VOX(r.x, s.grid.xstepr);
+            p.y = DIST2VOX(r.y, s.grid.ystepr);
+            p.z = DIST2VOX(r.z, s.grid.zstepr);
         } // Propagate photon
 
         // Calculate the new scattering angle using henyey-greenstein
-        if(tissueIndex) henyey_greenstein(t, g.tg, g.momTiss, tissueIndex, &d);
+        if(tissueIndex != 0)
+            henyey_greenstein(t, g.tg, g.momTiss, tissueIndex, photonIndex, s.n_photons, &d);
     } // loop until end of single photon
 
     // Score exiting photon and save history files
-    p.x = DIST2VOX(r.x, s.grid.xstep);
-    p.y = DIST2VOX(r.y, s.grid.ystep);
-    p.z = DIST2VOX(r.z, s.grid.zstep);
-
-    /*
-    g.II[0] = p.x;
-    g.II[1] = p.y;
-    g.II[2] = p.z;
-    g.II[3] = photonIndex;
-    g.II[4] = -1;
-    */
+    p.x = DIST2VOX(r.x, s.grid.xstepr);
+    p.y = DIST2VOX(r.y, s.grid.ystepr);
+    p.z = DIST2VOX(r.z, s.grid.zstepr);
 
     if ( p.x >= 0 && p.x < s.grid.dim_x &&
          p.y >= 0 && p.y < s.grid.dim_y &&
          p.z >= 0 && p.z < s.grid.dim_z )
     {
         tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)];
-        //g.II[4] = tissueIndex;
         if( tissueIndex == 0 )
         {
             time = (int) ((dist - s.min_length) * s.stepLr);
@@ -209,17 +187,15 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
                 p.y >= s.grid.Iymin && p.y <= s.grid.Iymax &&
                 p.z >= s.grid.Izmin && p.z <= s.grid.Izmax &&
                 time < s.max_time )
-                g.II[LIN3D(p.x,p.y,p.z,s.grid.dim_x,s.grid.dim_y)] -= P2pt;
+                g.II[timed_LIN3D(p.x, p.y, p.z, time, s.grid)] -= P2pt;
 
             // Loop through number of detectors
             // Did the photon hit a detector?
             for( i = 0; i < s.det.num; i++ )
                 if( abs(p.x - g.detLoc[i].x) <= s.det.radius &&
                     abs(p.y - g.detLoc[i].y) <= s.det.radius &&
-                    abs(p.z - g.detLoc[i].z) <= s.det.radius ) {
-                    //g.II[5] = 123;
+                    abs(p.z - g.detLoc[i].z) <= s.det.radius )
                     gpu_set(g.detHit, photonIndex, i);
-                }
         }
     }
 }
@@ -236,9 +212,9 @@ void correct_source(Simulation *sim)
     y0 = sim->src.r.y;
     z0 = sim->src.r.z;
 
-    i = DIST2VOX(x0, sim->grid.xstep);
-    j = DIST2VOX(y0, sim->grid.ystep);
-    k = DIST2VOX(z0, sim->grid.zstep);
+    i = DIST2VOX(x0, sim->grid.xstepr);
+    j = DIST2VOX(y0, sim->grid.ystepr);
+    k = DIST2VOX(z0, sim->grid.zstepr);
 
     tissueIndex = sim->grid.tissueType[i][j][k];
 
@@ -250,9 +226,9 @@ void correct_source(Simulation *sim)
         x0 -= sim->src.d.x * sim->grid.minstepsize;
         y0 -= sim->src.d.y * sim->grid.minstepsize;
         z0 -= sim->src.d.z * sim->grid.minstepsize;
-        i = DIST2VOX(x0, sim->grid.xstep);
-        j = DIST2VOX(y0, sim->grid.ystep);
-        k = DIST2VOX(z0, sim->grid.zstep);
+        i = DIST2VOX(x0, sim->grid.xstepr);
+        j = DIST2VOX(y0, sim->grid.ystepr);
+        k = DIST2VOX(z0, sim->grid.zstepr);
         tissueIndex = sim->grid.tissueType[i][j][k];
     }
     while( tissueIndex == 0 )
@@ -260,9 +236,9 @@ void correct_source(Simulation *sim)
         x0 += sim->src.d.x * sim->grid.minstepsize;
         y0 += sim->src.d.y * sim->grid.minstepsize;
         z0 += sim->src.d.z * sim->grid.minstepsize;
-        i = DIST2VOX(x0, sim->grid.xstep);
-        j = DIST2VOX(y0, sim->grid.ystep);
-        k = DIST2VOX(z0, sim->grid.zstep);
+        i = DIST2VOX(x0, sim->grid.xstepr);
+        j = DIST2VOX(y0, sim->grid.ystepr);
+        k = DIST2VOX(z0, sim->grid.zstepr);
         tissueIndex = sim->grid.tissueType[i][j][k];
     }
 
@@ -277,7 +253,7 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     // TODO: optimize the number of blocks/threads per block.
     // FIXME: as things stand, the kernel will most likely simulate too
     //        many photons; do something about it.
-    run_simulation <<< conf.n_blocks, conf.n_threads_per_block >>>(gmem, sim);
+    run_simulation<<< conf.n_blocks, conf.n_threads_per_block >>>(gmem, sim);
 
     // Make sure all photons have already been simulated before moving on.
     cudaThreadSynchronize();

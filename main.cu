@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     // Retrieve results to host
     printf("Now we send this stuff back to the host!\n");
     retrieve(&sim, &gmem);
-    
+
     // Write results to disk.
     printf("We'd better save those bits to disk before we're gone!\n");
     write_results(sim, argv[1]);

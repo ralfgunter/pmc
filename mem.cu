@@ -64,9 +64,9 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                  sim->grid.dim_x, sim->grid.dim_y, sim->grid.dim_z);
 
     // Setup the path length and momentum transfer arrays.
-    num_tissueArrays = (sim->tiss.num + 1) * (sim->n_photons);
-    sim->lenTiss = (float *) calloc(num_tissueArrays, sizeof(float));
-    sim->momTiss = (float *) calloc(num_tissueArrays, sizeof(float));
+    num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
+    sim->lenTiss = (Real *) calloc(num_tissueArrays, sizeof(Real));
+    sim->momTiss = (Real *) calloc(num_tissueArrays, sizeof(Real));
 
     // Photon fluence.
     num_II = sim->grid.nIxyz * sim->max_time;
@@ -78,16 +78,16 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     // Seed used by the RNG.
     sizeof_seed = sizeof(uint) * conf.n_threads * RAND_SEED_LEN;
     h_seed = (uint *) malloc(sizeof_seed);
-    for (int i = 0; i < conf.n_threads * RAND_SEED_LEN; i++)
+    for(int i = 0; i < conf.n_threads * RAND_SEED_LEN; i++)
         h_seed[i] = rand();
 
     // Allocate memory on the GPU global memory.
     // TODO: use constant memory where appropriate 
     cudaMalloc((void **) &d_tissueType, grid_dim * sizeof(char));
     cudaMalloc((void **) &d_detLoc, sim->det.num * sizeof(int3));
-    cudaMalloc((void **) &d_tmusr, (1 + sim->tiss.num) * sizeof(Real));
-    cudaMalloc((void **) &d_tmua,  (1 + sim->tiss.num) * sizeof(Real));
-    cudaMalloc((void **) &d_tg,    (1 + sim->tiss.num) * sizeof(Real));
+    cudaMalloc((void **) &d_tmusr, (sim->tiss.num + 1) * sizeof(Real));
+    cudaMalloc((void **) &d_tmua,  (sim->tiss.num + 1) * sizeof(Real));
+    cudaMalloc((void **) &d_tg,    (sim->tiss.num + 1) * sizeof(Real));
     cudaMalloc((void **) &d_lenTiss,  num_tissueArrays * sizeof(Real));
     cudaMalloc((void **) &d_momTiss,  num_tissueArrays * sizeof(Real));
     cudaMalloc((void **) &d_II,       num_II           * sizeof(Real));
@@ -97,13 +97,13 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     // Copy simulation memory to the GPU.
     //cudaMemcpyToSymbol(s, sim, sizeof(Simulation));
     TO_DEVICE(d_tissueType, h_linear_tissueType, grid_dim * sizeof(char));
-    TO_DEVICE(d_detLoc,     h_detLoc, sim->det.num  * sizeof(int3));
-    TO_DEVICE(d_tmusr,   sim->tiss.musr,  (1 + sim->tiss.num) * sizeof(Real));
-    TO_DEVICE(d_tmua,    sim->tiss.mua,   (1 + sim->tiss.num) * sizeof(Real));
-    TO_DEVICE(d_tg,      sim->tiss.g,     (1 + sim->tiss.num) * sizeof(Real));
-    TO_DEVICE(d_lenTiss, sim->lenTiss, num_tissueArrays * sizeof(Real));
-    TO_DEVICE(d_momTiss, sim->momTiss, num_tissueArrays * sizeof(Real));
-    TO_DEVICE(d_II,      sim->II,      num_II           * sizeof(Real));
+    TO_DEVICE(d_detLoc,     h_detLoc,        sim->det.num * sizeof(int3));
+    TO_DEVICE(d_tmusr,   sim->tiss.musr, (sim->tiss.num + 1) * sizeof(Real));
+    TO_DEVICE(d_tmua,    sim->tiss.mua,  (sim->tiss.num + 1) * sizeof(Real));
+    TO_DEVICE(d_tg,      sim->tiss.g,    (sim->tiss.num + 1) * sizeof(Real));
+    TO_DEVICE(d_lenTiss, sim->lenTiss,      num_tissueArrays * sizeof(Real));
+    TO_DEVICE(d_momTiss, sim->momTiss,      num_tissueArrays * sizeof(Real));
+    TO_DEVICE(d_II,      sim->II,           num_II           * sizeof(Real));
     TO_DEVICE(d_detHit_matrix, sim->detHit.matrix, bitset_size(sim->detHit) * sizeof(uint));
     TO_DEVICE(d_seed, h_seed, sizeof_seed);
 
@@ -132,9 +132,8 @@ void free_mem(Simulation sim, GPUMemory gmem)
     int i,j;
 
     // Detectors' locations.
-    for( i = 0; i < sim.det.num; i++ ) {
+    for( i = 0; i < sim.det.num; i++ )
         free(sim.det.loc[i]);
-    }
     free(sim.det.loc);
     cudaFree(gmem.detLoc);
 
@@ -177,7 +176,7 @@ void free_mem(Simulation sim, GPUMemory gmem)
 
 void retrieve(Simulation *sim, GPUMemory *gmem)
 {
-    size_t sizeof_tissueArrays = (sim->n_photons) * (sim->tiss.num + 1) * sizeof(Real);
+    size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(Real);
     size_t sizeof_II = sim->grid.nIxyz * sim->max_time * sizeof(Real);
     size_t sizeof_detHit = bitset_size(sim->detHit) * sizeof(uint);
 

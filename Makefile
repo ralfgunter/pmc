@@ -2,6 +2,7 @@ DEV_SRC  = $(wildcard *.cu)
 DEV_OBJ  = $(DEV_SRC:%.cu=obj/%.o)
 HOST_SRC = $(wildcard *.cc)
 HOST_OBJ = $(HOST_SRC:%.cc=obj/%.o)
+
 LINK_FLAGS = -m32 -lm
 NVCC_FLAGS = -m32
 GCC_FLAGS  = -m32
