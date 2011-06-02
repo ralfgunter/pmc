@@ -20,15 +20,14 @@
 #include "bitset2d_kernel.h"
 
 #define timed_LIN3D(i,j,k,time,grid) (time * grid.nIxyz + \
-                                      ((k) - grid.Izmin) * grid.nIxy + \
-                                      ((j) - grid.Iymin) * grid.nIxstep + \
-                                      ((i) - grid.Ixmin))
+                                      ((k) - grid.Imin.z) * grid.nIxy + \
+                                      ((j) - grid.Imin.y) * grid.nIstep.x + \
+                                      ((i) - grid.Imin.x))
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(Real *t, Real *tg, float *momTiss, char tissueIndex, int photonIndex, int n_photons, float3 *d)
+__device__ void henyey_greenstein(Real *t, Real *tg, Real *momTiss, char tissueIndex, int photonIndex, int n_photons, float3 *d)
 {
     float3 d0;
-
     Real rand;
     Real foo;
     Real theta, stheta, ctheta;
@@ -106,17 +105,17 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     int3 p;
     // TODO: The *step are also used only for division operations;
     //       Find out if they should receive the same treatment as stepLr.
-    p.x = DIST2VOX(r.x, s.grid.xstepr);
-    p.y = DIST2VOX(r.y, s.grid.ystepr);
-    p.z = DIST2VOX(r.z, s.grid.zstepr);
+    p.x = DIST2VOX(r.x, s.grid.stepr.x);
+    p.y = DIST2VOX(r.y, s.grid.stepr.y);
+    p.z = DIST2VOX(r.z, s.grid.stepr.z);
 
     // Loop until photon has exceeded its max distance allowed, or escapes
     // the grid.
     while( dist < s.max_length &&
-           p.x >= 0 && p.x < s.grid.dim_x &&
-           p.y >= 0 && p.y < s.grid.dim_y &&
-           p.z >= 0 && p.z < s.grid.dim_z &&
-           (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)]) != 0 )
+           p.x >= 0 && p.x < s.grid.dim.x &&
+           p.y >= 0 && p.y < s.grid.dim.y &&
+           p.z >= 0 && p.z < s.grid.dim.z &&
+           (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
     {
         rand_need_more(t, tnew);
 
@@ -124,19 +123,19 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
         Lresid = rand_next_scatlen(t);
 
         while( dist < s.max_length && Lresid > 0.0 &&
-               p.x >= 0 && p.x < s.grid.dim_x &&
-               p.y >= 0 && p.y < s.grid.dim_y &&
-               p.z >= 0 && p.z < s.grid.dim_z &&
-               (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)]) != 0 )
+               p.x >= 0 && p.x < s.grid.dim.x &&
+               p.y >= 0 && p.y < s.grid.dim.y &&
+               p.z >= 0 && p.z < s.grid.dim.z &&
+               (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
         {
             if(dist > Lnext && dist > s.min_length)
             {
                 time = (int) ((dist - s.min_length) * s.stepLr);
 
-                if ( p.x >= s.grid.Ixmin && p.x <= s.grid.Ixmax &&
-                     p.y >= s.grid.Iymin && p.y <= s.grid.Iymax &&
-                     p.z >= s.grid.Izmin && p.z <= s.grid.Izmax &&
-                     time < s.max_time )
+                if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
+                    p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
+                    p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
+                    time < s.max_time )
                      g.II[timed_LIN3D(p.x, p.y, p.z, time, s.grid)] += P2pt;
 
                 Lnext += s.grid.minstepsize;
@@ -160,9 +159,9 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
             P2pt *= exp(-(g.tmua[tissueIndex]) * step);
             g.lenTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += step;
 
-            p.x = DIST2VOX(r.x, s.grid.xstepr);
-            p.y = DIST2VOX(r.y, s.grid.ystepr);
-            p.z = DIST2VOX(r.z, s.grid.zstepr);
+            p.x = DIST2VOX(r.x, s.grid.stepr.x);
+            p.y = DIST2VOX(r.y, s.grid.stepr.y);
+            p.z = DIST2VOX(r.z, s.grid.stepr.z);
         } // Propagate photon
 
         // Calculate the new scattering angle using henyey-greenstein
@@ -171,21 +170,21 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     } // loop until end of single photon
 
     // Score exiting photon and save history files
-    p.x = DIST2VOX(r.x, s.grid.xstepr);
-    p.y = DIST2VOX(r.y, s.grid.ystepr);
-    p.z = DIST2VOX(r.z, s.grid.zstepr);
+    p.x = DIST2VOX(r.x, s.grid.stepr.x);
+    p.y = DIST2VOX(r.y, s.grid.stepr.y);
+    p.z = DIST2VOX(r.z, s.grid.stepr.z);
 
-    if ( p.x >= 0 && p.x < s.grid.dim_x &&
-         p.y >= 0 && p.y < s.grid.dim_y &&
-         p.z >= 0 && p.z < s.grid.dim_z )
+    if ( p.x >= 0 && p.x < s.grid.dim.x &&
+         p.y >= 0 && p.y < s.grid.dim.y &&
+         p.z >= 0 && p.z < s.grid.dim.z )
     {
-        tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim_x, s.grid.dim_y)];
+        tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
         if( tissueIndex == 0 )
         {
             time = (int) ((dist - s.min_length) * s.stepLr);
-            if( p.x >= s.grid.Ixmin && p.x <= s.grid.Ixmax &&
-                p.y >= s.grid.Iymin && p.y <= s.grid.Iymax &&
-                p.z >= s.grid.Izmin && p.z <= s.grid.Izmax &&
+            if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
+                p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
+                p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
                 time < s.max_time )
                 g.II[timed_LIN3D(p.x, p.y, p.z, time, s.grid)] -= P2pt;
 
@@ -212,23 +211,23 @@ void correct_source(Simulation *sim)
     y0 = sim->src.r.y;
     z0 = sim->src.r.z;
 
-    i = DIST2VOX(x0, sim->grid.xstepr);
-    j = DIST2VOX(y0, sim->grid.ystepr);
-    k = DIST2VOX(z0, sim->grid.zstepr);
+    i = DIST2VOX(x0, sim->grid.stepr.x);
+    j = DIST2VOX(y0, sim->grid.stepr.y);
+    k = DIST2VOX(z0, sim->grid.stepr.z);
 
     tissueIndex = sim->grid.tissueType[i][j][k];
 
     while( tissueIndex != 0 &&
-           i > 0 && i < sim->grid.dim_x &&
-           j > 0 && j < sim->grid.dim_y &&
-           k > 0 && k < sim->grid.dim_z )
+           i > 0 && i < sim->grid.dim.x &&
+           j > 0 && j < sim->grid.dim.y &&
+           k > 0 && k < sim->grid.dim.z )
     {
         x0 -= sim->src.d.x * sim->grid.minstepsize;
         y0 -= sim->src.d.y * sim->grid.minstepsize;
         z0 -= sim->src.d.z * sim->grid.minstepsize;
-        i = DIST2VOX(x0, sim->grid.xstepr);
-        j = DIST2VOX(y0, sim->grid.ystepr);
-        k = DIST2VOX(z0, sim->grid.zstepr);
+        i = DIST2VOX(x0, sim->grid.stepr.x);
+        j = DIST2VOX(y0, sim->grid.stepr.y);
+        k = DIST2VOX(z0, sim->grid.stepr.z);
         tissueIndex = sim->grid.tissueType[i][j][k];
     }
     while( tissueIndex == 0 )
@@ -236,9 +235,9 @@ void correct_source(Simulation *sim)
         x0 += sim->src.d.x * sim->grid.minstepsize;
         y0 += sim->src.d.y * sim->grid.minstepsize;
         z0 += sim->src.d.z * sim->grid.minstepsize;
-        i = DIST2VOX(x0, sim->grid.xstepr);
-        j = DIST2VOX(y0, sim->grid.ystepr);
-        k = DIST2VOX(z0, sim->grid.zstepr);
+        i = DIST2VOX(x0, sim->grid.stepr.x);
+        j = DIST2VOX(y0, sim->grid.stepr.y);
+        k = DIST2VOX(z0, sim->grid.stepr.z);
         tissueIndex = sim->grid.tissueType[i][j][k];
     }
 

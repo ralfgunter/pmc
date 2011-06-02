@@ -40,47 +40,49 @@
 
 #define DIST2VOX(x, sr) ((int) ((x) * (sr)))
 
-typedef float Real; // ideally this should be configurable.
 typedef unsigned int uint;
+typedef unsigned char uchar;
+typedef float Real;
 
 // TODO: find a better place for this?
 #define RAND_BUF_LEN  5     // Register arrays
 #define RAND_SEED_LEN 5     // 32bit seed length (32*5 = 160bits)
 
+#define MAX_DETECTORS 256
+
 typedef struct {
-    char ***tissueType;           // type of the tissue within the voxel
-    int dim_x, dim_y, dim_z;      // dimensions of the image file
-    Real xstepr, ystepr, zstepr;  // inverse of voxel dimensions
+    unsigned char ***tissueType; // type of the tissue within the voxel
+    int3 dim;       // dimensions of the image file
+    float3 stepr;   // inverse of voxel dimensions
     Real minstepsize;
 
     // Apparently this restricts the photon fluence calculation to within
     // a box outlined by the following coordinates.
-    int Ixmin, Ixmax;
-    int Iymin, Iymax;
-    int Izmin, Izmax;
+    int3 Imin, Imax;
 
     // TODO: find better names
-    int nIxstep, nIystep, nIzstep;
+    int3 nIstep;
     int nIxy, nIxyz;
-} grid;
+} Grid;
 
 typedef struct {
     float3 r;   // initial position of the photon (euclidean)
     float3 d;   // initial direction cosines 
-} source;
+} Source;
 
 typedef struct {
     int num;        // specify number of detectors
     Real radius;    // specify detector radius 
     int **loc;      // and x,y,z locations 
-} detectors;
+} Detectors;
 
 typedef struct {
     int num;
+
     // Optical properties of the different tissue types
     Real *musr, *mua;
     Real *g, *n;
-} tissue;
+} Tissue;
 
 typedef struct {
     int n_photons;
@@ -93,23 +95,25 @@ typedef struct {
     Real *lenTiss, *momTiss;
     Real *II;
 
-    grid grid;
-    source src;
-    detectors det;
-    tissue tiss;
+    Grid grid;
+    Source src;
+    Detectors det;
+    Tissue tiss;
 } Simulation;
 
 // Structure holding pointers to the GPU global memory.
 typedef struct {
-    char *tissueType;
+    // Tissue type index of each voxel.
+    unsigned char *tissueType;
 
-    int3 *detLoc;   // TODO: investigate performance of int4
+    // Location (grid) of each detector.
+    int3 *detLoc;
 
     // Optical properties of the different tissue types.
     Real *tmusr, *tmua;
     Real *tg;
 
-    // Path length and momentum transfer
+    // Path length and momentum transfer.
     Real *lenTiss, *momTiss;
 
     // Photon fluence
@@ -142,5 +146,6 @@ extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
 // TODO: profile, profile, profile.
 //__constant__ Simulation s;
 //__constant__ GPUMemory g;
+//__constant__ int3 detLoc[MAX_DETECTORS];
 
 #endif // _MAIN_H_

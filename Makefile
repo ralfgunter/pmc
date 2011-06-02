@@ -4,7 +4,7 @@ HOST_SRC = $(wildcard *.cc)
 HOST_OBJ = $(HOST_SRC:%.cc=obj/%.o)
 
 LINK_FLAGS = -m32 -lm
-NVCC_FLAGS = -m32
+NVCC_FLAGS = -m32 -use_fast_math -arch=compute_11
 GCC_FLAGS  = -m32
 
 all: tMCimg 

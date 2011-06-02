@@ -20,7 +20,7 @@
 int read_segmentation_file(Simulation *sim, const char *filename)
 {
     FILE *fp;
-    char ***tissueType;
+    uchar ***tissueType;
     int i,j,k;
 
     printf( "Loading target medium volume from %s\n", filename );
@@ -32,17 +32,17 @@ int read_segmentation_file(Simulation *sim, const char *filename)
         return -1;    // TODO: better error handling (possibly through CUDA?)
     }
 
-    tissueType = (char ***) malloc(sim->grid.dim_x * sizeof(char **));
-    for( i = 0; i < sim->grid.dim_x; i++ ) {
-        tissueType[i] = (char **) malloc(sim->grid.dim_y * sizeof(char *));
-        for( j = 0; j < sim->grid.dim_y; j++ ) {
-            tissueType[i][j] = (char *) malloc(sim->grid.dim_z * sizeof(char));
+    tissueType = (uchar ***) malloc(sim->grid.dim.x * sizeof(uchar **));
+    for( i = 0; i < sim->grid.dim.x; i++ ) {
+        tissueType[i] = (uchar **) malloc(sim->grid.dim.y * sizeof(uchar *));
+        for( j = 0; j < sim->grid.dim.y; j++ ) {
+            tissueType[i][j] = (uchar *) malloc(sim->grid.dim.z * sizeof(uchar));
         }
     }
 
-    for( k = 0; k < sim->grid.dim_z; k++ )
-        for( j = 0; j < sim->grid.dim_y; j++ )
-            for( i = 0; i < sim->grid.dim_x; i++ )
+    for( k = 0; k < sim->grid.dim.z; k++ )
+        for( j = 0; j < sim->grid.dim.y; j++ )
+            for( i = 0; i < sim->grid.dim.x; i++ )
                 fscanf( fp, "%c", &tissueType[i][j][k] );
 
     sim->grid.tissueType = tissueType;
@@ -90,7 +90,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     int **detLoc;       // and x,y,z locations 
 
     FILE *fp;
-    char segFile[32];   // file name for image file 
+    char segFile[128];   // file name for image file 
 
     fp = fopen( filename, "r" );
     if( fp == NULL ) {
@@ -191,18 +191,18 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     sim->n_photons = n_photons;
 
     sim->grid.minstepsize = minstepsize;
-    sim->grid.Ixmin = Ixmin; sim->grid.Ixmax = Ixmax;
-    sim->grid.Iymin = Iymin; sim->grid.Iymax = Iymax;
-    sim->grid.Izmin = Izmin; sim->grid.Izmax = Izmax;
-    sim->grid.dim_x = dim_x;
-    sim->grid.dim_y = dim_y;
-    sim->grid.dim_z = dim_z;
-    sim->grid.xstepr = 1.0 / xstep; // as with tmusr
-    sim->grid.ystepr = 1.0 / ystep; // as with tmusr
-    sim->grid.zstepr = 1.0 / zstep; // as with tmusr
-    sim->grid.nIxstep = nIxstep;
-    sim->grid.nIystep = nIystep;
-    sim->grid.nIzstep = nIzstep;
+    sim->grid.Imin.x = Ixmin; sim->grid.Imax.x = Ixmax;
+    sim->grid.Imin.y = Iymin; sim->grid.Imax.y = Iymax;
+    sim->grid.Imin.z = Izmin; sim->grid.Imax.z = Izmax;
+    sim->grid.dim.x = dim_x;
+    sim->grid.dim.y = dim_y;
+    sim->grid.dim.z = dim_z;
+    sim->grid.stepr.x = 1.0 / xstep; // as with tmusr
+    sim->grid.stepr.y = 1.0 / ystep; // as with tmusr
+    sim->grid.stepr.z = 1.0 / zstep; // as with tmusr
+    sim->grid.nIstep.x = nIxstep;
+    sim->grid.nIstep.y = nIystep;
+    sim->grid.nIstep.z = nIzstep;
     sim->grid.nIxy  = nIxstep * nIystep;
     sim->grid.nIxyz = nIzstep * sim->grid.nIxy;
 
@@ -234,7 +234,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 void write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *momentum, *pathlength;
-    char filename[32];
+    char filename[128];
     int i, j, k, photonIndex;
 
     // TODO: check for errors

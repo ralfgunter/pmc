@@ -47,11 +47,11 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     uint *d_detHit_matrix;
     uint *h_seed, *d_seed;
     int3 *h_detLoc, *d_detLoc;
-    char *h_linear_tissueType, *d_tissueType;
+    uchar *h_linear_tissueType, *d_tissueType;
     size_t num_tissueArrays, num_II, sizeof_seed;
 
     // Total number of voxel elements
-    int grid_dim = sim->grid.dim_x * sim->grid.dim_y * sim->grid.dim_z;
+    int grid_dim = sim->grid.dim.x * sim->grid.dim.y * sim->grid.dim.z;
 
     // Convert tMCimg's double array describing the detectors' locations
     // to an array of int3, which is easier to use on CUDA.
@@ -59,9 +59,9 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Linearize tissueType so that it can be converted into a cudaArray
     // and later bound to a 3d texture.
-    h_linear_tissueType = (char *) malloc(grid_dim * sizeof(char));
+    h_linear_tissueType = (uchar *) malloc(grid_dim * sizeof(uchar));
     linearize_3d(sim->grid.tissueType, h_linear_tissueType,
-                 sim->grid.dim_x, sim->grid.dim_y, sim->grid.dim_z);
+                 sim->grid.dim.x, sim->grid.dim.y, sim->grid.dim.z);
 
     // Setup the path length and momentum transfer arrays.
     num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
@@ -83,7 +83,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Allocate memory on the GPU global memory.
     // TODO: use constant memory where appropriate 
-    cudaMalloc((void **) &d_tissueType, grid_dim * sizeof(char));
+    cudaMalloc((void **) &d_tissueType, grid_dim * sizeof(uchar));
     cudaMalloc((void **) &d_detLoc, sim->det.num * sizeof(int3));
     cudaMalloc((void **) &d_tmusr, (sim->tiss.num + 1) * sizeof(Real));
     cudaMalloc((void **) &d_tmua,  (sim->tiss.num + 1) * sizeof(Real));
@@ -96,7 +96,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Copy simulation memory to the GPU.
     //cudaMemcpyToSymbol(s, sim, sizeof(Simulation));
-    TO_DEVICE(d_tissueType, h_linear_tissueType, grid_dim * sizeof(char));
+    TO_DEVICE(d_tissueType, h_linear_tissueType, grid_dim * sizeof(uchar));
     TO_DEVICE(d_detLoc,     h_detLoc,        sim->det.num * sizeof(int3));
     TO_DEVICE(d_tmusr,   sim->tiss.musr, (sim->tiss.num + 1) * sizeof(Real));
     TO_DEVICE(d_tmua,    sim->tiss.mua,  (sim->tiss.num + 1) * sizeof(Real));
@@ -138,8 +138,8 @@ void free_mem(Simulation sim, GPUMemory gmem)
     cudaFree(gmem.detLoc);
 
     // Tissue types.
-    for( i = 0; i < sim.grid.dim_x; i++ ) {
-        for( j = 0; j < sim.grid.dim_y; j++ ) {
+    for( i = 0; i < sim.grid.dim.x; i++ ) {
+        for( j = 0; j < sim.grid.dim.y; j++ ) {
             free(sim.grid.tissueType[i][j]);
         }
         free(sim.grid.tissueType[i]);
