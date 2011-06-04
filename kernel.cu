@@ -24,8 +24,8 @@
                                       ((j) - grid.Imin.y) * grid.nIstep.x + \
                                       ((i) - grid.Imin.x))
 
-__constant__ int3 detLoc[MAX_DETECTORS];
-__constant__ float3 tissueProp[MAX_TISSUES];
+__constant__ int4 detLoc[MAX_DETECTORS];
+__constant__ float4 tissueProp[MAX_TISSUES];
 
 // TODO: do away with the first argument.
 __device__ void henyey_greenstein(Real *t, Real gg, Real *momTiss, char tissueIndex, int photonIndex, int n_photons, float3 *d)
@@ -74,8 +74,8 @@ __device__ void henyey_greenstein(Real *t, Real gg, Real *momTiss, char tissueIn
 
 __global__ void run_simulation(GPUMemory g, Simulation s)
 {
-    __shared__ int3 shm_detLoc[MAX_DETECTORS + MAX_TISSUES];
-    float3 *shm_tissueProp = (float3 *) shm_detLoc + MAX_DETECTORS;
+    __shared__ int4 shm_detLoc[MAX_DETECTORS + MAX_TISSUES];
+    float4 *shm_tissueProp = (float4 *) shm_detLoc + MAX_DETECTORS;
 
     // Loop index
     int i;
@@ -107,15 +107,15 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     gpu_rng_init(t, tnew, g.seed, photonIndex);
 
     // Direction cosines of the photon
-    float3 d = s.src.d;
+    float3 d;
+    d.x = s.src.d.x; d.y = s.src.d.y; d.z = s.src.d.z;
 
     // Photon position (euclidean)
-    float3 r = s.src.r;
+    float3 r;
+    r.x = s.src.r.x; r.y = s.src.r.y; r.z = s.src.r.z;
 
     // Photon position (grid)
     int3 p;
-    // TODO: The *step are also used only for division operations;
-    //       Find out if they should receive the same treatment as stepLr.
     p.x = DIST2VOX(r.x, s.grid.stepr.x);
     p.y = DIST2VOX(r.y, s.grid.stepr.y);
     p.z = DIST2VOX(r.z, s.grid.stepr.z);
@@ -203,9 +203,9 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
             // Loop through number of detectors
             // Did the photon hit a detector?
             for( i = 0; i < s.det.num; i++ )
-                if( abs(p.x - shm_detLoc[i].x) <= s.det.radius &&
-                    abs(p.y - shm_detLoc[i].y) <= s.det.radius &&
-                    abs(p.z - shm_detLoc[i].z) <= s.det.radius )
+                if( abs(p.x - shm_detLoc[i].x) <= shm_detLoc[i].w &&
+                    abs(p.y - shm_detLoc[i].y) <= shm_detLoc[i].w &&
+                    abs(p.z - shm_detLoc[i].z) <= shm_detLoc[i].w )
                     gpu_set(g.detHit, photonIndex, i);
         }
     }

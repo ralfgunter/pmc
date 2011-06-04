@@ -62,35 +62,33 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     int n_photons;  // total number of photons to run
     int n_tissues;  // number of tissue types described in the image file
 
-    int dim_x, dim_y, dim_z;    // dimensions of the image file
-    double xstep, ystep, zstep; // voxel dimensions
+    int3 grid_dim;   // dimensions of the image file
+    float3 vox_dim; // voxel dimensions
     double minstepsize;
 
-    Real *tmusr, *tmua;  // optical properties of the different tissue types
-    Real *tg, *tn;
+    float4 *tissProp;  // optical properties of the different tissue types
 
-    double src_x, src_y, src_z;     // initial position of the photon (euclidean)
-    double src_dx, src_dy, src_dz;  // initial direction cosines 
+    float4 src_pos; // initial position of the photon (euclidean)
+    float4 src_dir; // initial direction cosines 
 
-    int Ixmin, Ixmax, Iymin, Iymax, Izmin, Izmax;   // min and max x,y,z for 
-                                                    // storing the 2-pt fluence
-    int nIxstep, nIystep, nIzstep;
+    int3 Imin, Imax;    // min and max x,y,z for storing the fluence
+    int3 nIstep;        // dimensions of the the region above
 
-    double minT, maxT;      // min and max time for sampling the 2-pt fluence 
+    double minT, maxT;      // min and max time for sampling the photon fluence 
     double stepT, stepL;    // time step and corresponding length step for sampling 
-                            // the 2-pt fluence 
+                            // the photon fluence 
     double stepT_r, stepT_too_small;   // stepT_r remainder gate width 
 
     double min_length, max_length;  // min and max length allowed for the photon to propagate
     double max_time_float;
     int max_time, max_time_int;
 
-    int nDets;          // specify number of detectors
-    float detRad;       // specify detector radius 
-    int **detLoc;       // and x,y,z locations 
+    int num_dets;   // specify number of detectors
+    int4 *det;      // grid position of each detector, plus its radius
 
     FILE *fp;
     char segFile[128];   // file name for image file 
+
 
     fp = fopen( filename, "r" );
     if( fp == NULL ) {
@@ -102,35 +100,35 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     // Read the input file 
     fscanf( fp, "%d", &n_photons );                         // total number of photons
     fscanf( fp, "%d", &rand_seed );                         // random number seed
-    fscanf( fp, "%lf %lf %lf", &src_x, &src_y, &src_z );    // source location
-    fscanf( fp, "%lf %lf %lf", &src_dx, &src_dy, &src_dz ); // initial direction of photon
+    fscanf( fp, "%f %f %f", &src_pos.x, &src_pos.y, &src_pos.z );    // source location
+    fscanf( fp, "%f %f %f", &src_dir.x, &src_dir.y, &src_dir.z );    // source src_direction
     fscanf( fp, "%lf %lf %lf", &minT, &maxT, &stepT );      // min, max, step time for recording
     fscanf( fp, "%s", segFile );                            // file containing tissue structure
 
     // Read image dimensions
-    fscanf( fp, "%lf %d %d %d", &xstep, &dim_x, &Ixmin, &Ixmax );
-    fscanf( fp, "%lf %d %d %d", &ystep, &dim_y, &Iymin, &Iymax );
-    fscanf( fp, "%lf %d %d %d", &zstep, &dim_z, &Izmin, &Izmax );
-    Ixmin--; Ixmax--; Iymin--; Iymax--; Izmin--; Izmax--;
-    nIxstep = Ixmax-Ixmin+1;
-    nIystep = Iymax-Iymin+1;
-    nIzstep = Izmax-Izmin+1;
+    fscanf( fp, "%f %d %d %d", &vox_dim.x, &grid_dim.x, &Imin.x, &Imax.x );
+    fscanf( fp, "%f %d %d %d", &vox_dim.y, &grid_dim.y, &Imin.y, &Imax.y );
+    fscanf( fp, "%f %d %d %d", &vox_dim.z, &grid_dim.z, &Imin.z, &Imax.z );
+    Imin.x--; Imax.x--; Imin.y--; Imax.y--; Imin.z--; Imax.z--;
+    nIstep.x = Imax.x - Imin.x + 1;
+    nIstep.y = Imax.y - Imin.y + 1;
+    nIstep.z = Imax.z - Imin.z + 1;
 
     // Read number of tissue types and their optical properties
     fscanf( fp, "%d", &n_tissues );
     // Index 0 is used as a flag
-    tmusr = (Real *) malloc((n_tissues + 1) * sizeof(Real));
-    tmua  = (Real *) malloc((n_tissues + 1) * sizeof(Real));
-    tg    = (Real *) malloc((n_tissues + 1) * sizeof(Real));
-    tn    = (Real *) malloc((n_tissues + 1) * sizeof(Real));
-    tmusr[0] = (1.0 / -999.0); tmua[0] = -999.0; tg[0] = -999.0; tn[0] = -999.0;
+    tissProp = (float4 *) malloc((n_tissues + 1) * sizeof(float4));
+    tissProp[0].x = (1.0 / -999.0);
+    tissProp[0].y = -999.0;
+    tissProp[0].z = -999.0;
+    tissProp[0].w = -999.0;
     for( i = 1; i <= n_tissues; i++ ) {
         float tmus;
         // TODO: allow Real = double as well
-        fscanf( fp, "%f %f %f %f", &tmus, &tg[i], &tmua[i], &tn[i] );
-        if( tn[i] != 1.0 ) {
+        fscanf( fp, "%f %f %f %f", &tmus, &tissProp[i].y, &tissProp[i].z, &tissProp[i].w );
+        if( tissProp[i].w != 1.0 ) {
             printf( "WARNING: The code does not yet support n != 1.0\n" );
-            printf( "tn[%d] = %f\n", i, tn[i] );
+            printf( "tn[%d] = %f\n", i, tissProp[i].w );
         }
         if( tmus == 0.0 ) {
             printf( "ERROR: The code does not support mus = 0.0\n" );
@@ -139,21 +137,22 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
         // The scattering coefficient is always used in the denominator of a
         // division, which is more computationally expensive to do than
         // multiplication, hence why we store its inverse here.
-        tmusr[i] = 1.0 / tmus;
+        tissProp[i].x = 1.0 / tmus;
     }
 
-    // Read number of detectors, detector radius, and detector locations
-    fscanf( fp, "%d %f", &nDets, &detRad );
+    // Read number of detectors, their radius and locations.
+    float radius;
+    fscanf( fp, "%d %f", &num_dets, &radius);
 
-    detLoc = (int **) malloc(nDets * sizeof(int *));
-    for( i = 0; i < nDets; i++ ) {
+    det = (int4 *) malloc(num_dets * sizeof(int4));
+    for( i = 0; i < num_dets; i++ ) {
         double det_x, det_y, det_z;
-        detLoc[i] = (int *) malloc(3 * sizeof(int));
 
         fscanf( fp, "%lf %lf %lf", &det_x, &det_y, &det_z);
-        detLoc[i][0] = (int) (det_x / xstep) - 1;
-        detLoc[i][1] = (int) (det_y / ystep) - 1;
-        detLoc[i][2] = (int) (det_z / zstep) - 1;
+        det[i].x = (int) (det_x / vox_dim.x) - 1;
+        det[i].y = (int) (det_y / vox_dim.y) - 1;
+        det[i].z = (int) (det_z / vox_dim.z) - 1;
+        det[i].w = (int) radius;
     }
 
     fclose(fp);
@@ -169,18 +168,18 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
         max_time = ceil(max_time_float);
 
     // Get the minimum dimension
-    minstepsize = MIN(xstep, MIN(ystep, zstep)); 
+    minstepsize = MIN(vox_dim.x, MIN(vox_dim.y, vox_dim.z)); 
 
     // Normalize the direction cosine of the source
-    Real foo = sqrt(src_dx*src_dx + src_dy*src_dy + src_dz*src_dz);
-    src_dx /= foo;
-    src_dy /= foo;
-    src_dz /= foo;
+    Real foo = sqrt(src_dir.x*src_dir.x + src_dir.y*src_dir.y + src_dir.z*src_dir.z);
+    src_dir.x /= foo;
+    src_dir.y /= foo;
+    src_dir.z /= foo;
 
     // Calculate the min and max photon length from the min and max propagation times
-    max_length = maxT * C_VACUUM / tn[1];
-    min_length = minT * C_VACUUM / tn[1];
-    stepL = stepT * C_VACUUM / tn[1];
+    max_length = maxT * C_VACUUM / tissProp[1].w;
+    min_length = minT * C_VACUUM / tissProp[1].w;
+    stepL = stepT * C_VACUUM / tissProp[1].w;
 
     // Copy data to the simulation struct
     sim->max_time = max_time;
@@ -191,37 +190,23 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     sim->n_photons = n_photons;
 
     sim->grid.minstepsize = minstepsize;
-    sim->grid.Imin.x = Ixmin; sim->grid.Imax.x = Ixmax;
-    sim->grid.Imin.y = Iymin; sim->grid.Imax.y = Iymax;
-    sim->grid.Imin.z = Izmin; sim->grid.Imax.z = Izmax;
-    sim->grid.dim.x = dim_x;
-    sim->grid.dim.y = dim_y;
-    sim->grid.dim.z = dim_z;
-    sim->grid.stepr.x = 1.0 / xstep; // as with tmusr
-    sim->grid.stepr.y = 1.0 / ystep; // as with tmusr
-    sim->grid.stepr.z = 1.0 / zstep; // as with tmusr
-    sim->grid.nIstep.x = nIxstep;
-    sim->grid.nIstep.y = nIystep;
-    sim->grid.nIstep.z = nIzstep;
-    sim->grid.nIxy  = nIxstep * nIystep;
-    sim->grid.nIxyz = nIzstep * sim->grid.nIxy;
+    sim->grid.Imin = Imin; sim->grid.Imax = Imax;
+    sim->grid.dim = grid_dim;
+    sim->grid.stepr.x = 1.0 / vox_dim.x; // as with tmusr
+    sim->grid.stepr.y = 1.0 / vox_dim.y; // as with tmusr
+    sim->grid.stepr.z = 1.0 / vox_dim.z; // as with tmusr
+    sim->grid.nIstep = nIstep;
+    sim->grid.nIxy  = nIstep.x * nIstep.y;
+    sim->grid.nIxyz = nIstep.z * sim->grid.nIxy;
 
-    sim->src.r.x = src_x;
-    sim->src.r.y = src_y;
-    sim->src.r.z = src_z;
-    sim->src.d.x = src_dx;
-    sim->src.d.y = src_dy;
-    sim->src.d.z = src_dz;
+    sim->src.r = src_pos;
+    sim->src.d = src_dir;
 
-    sim->det.num    = nDets;
-    sim->det.radius = detRad;
-    sim->det.loc    = detLoc;
+    sim->det.num  = num_dets;
+    sim->det.info = det;
 
-    sim->tiss.num  = n_tissues;
-    sim->tiss.musr = tmusr;
-    sim->tiss.mua  = tmua;
-    sim->tiss.g = tg;
-    sim->tiss.n = tn;
+    sim->tiss.num = n_tissues;
+    sim->tiss.prop = tissProp;
 
     conf->rand_seed = rand_seed;
 

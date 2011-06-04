@@ -67,22 +67,18 @@ typedef struct {
 } Grid;
 
 typedef struct {
-    float3 r;   // initial position of the photon (euclidean)
-    float3 d;   // initial direction cosines 
+    float4 r;   // initial position of the photon (euclidean)
+    float4 d;   // initial direction cosines 
 } Source;
 
 typedef struct {
-    int num;        // specify number of detectors
-    Real radius;    // specify detector radius 
-    int **loc;      // and x,y,z locations 
+    int num;    // specify number of detectors
+    int4 *info; // grid coordinates and and radius
 } Detectors;
 
 typedef struct {
     int num;
-
-    // Optical properties of the different tissue types
-    Real *musr, *mua;
-    Real *g, *n;
+    float4 *prop; // Optical properties
 } Tissue;
 
 typedef struct {
@@ -107,12 +103,11 @@ typedef struct {
     // Tissue type index of each voxel.
     unsigned char *tissueType;
 
-    // Location (grid) of each detector.
-    //int3 *detLoc;
+    // Location (grid) of each detector, plus its radius.
+    //int4 *detLoc;
 
     // Optical properties of the different tissue types.
-    //Real *tmusr, *tmua;
-    //Real *tg;
+    //float4 *prop;
 
     // Path length and momentum transfer.
     Real *lenTiss, *momTiss;
@@ -142,10 +137,5 @@ extern void retrieve(Simulation *sim, GPUMemory *gmem);
 extern void write_results(Simulation sim, const char *input_filename);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
-
-// Constant memory on the GPU
-// TODO: profile, profile, profile.
-//__constant__ Simulation s;
-//__constant__ GPUMemory g;
 
 #endif // _MAIN_H_
