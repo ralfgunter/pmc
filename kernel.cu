@@ -24,17 +24,17 @@
                                       ((j) - grid.Imin.y) * grid.nIstep.x + \
                                       ((i) - grid.Imin.x))
 
+__constant__ int3 detLoc[MAX_DETECTORS];
+__constant__ float3 tissueProp[MAX_TISSUES];
+
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(Real *t, Real *tg, Real *momTiss, char tissueIndex, int photonIndex, int n_photons, float3 *d)
+__device__ void henyey_greenstein(Real *t, Real gg, Real *momTiss, char tissueIndex, int photonIndex, int n_photons, float3 *d)
 {
     float3 d0;
     Real rand;
     Real foo;
     Real theta, stheta, ctheta;
     Real phi, sphi, cphi;
-    Real gg;
-
-    gg = tg[tissueIndex];
 
     // TODO: study more closely the random functions.
     rand = rand_next_aangle(t);
@@ -74,6 +74,9 @@ __device__ void henyey_greenstein(Real *t, Real *tg, Real *momTiss, char tissueI
 
 __global__ void run_simulation(GPUMemory g, Simulation s)
 {
+    __shared__ int3 shm_detLoc[MAX_DETECTORS + MAX_TISSUES];
+    float3 *shm_tissueProp = (float3 *) shm_detLoc + MAX_DETECTORS;
+
     // Loop index
     int i;
 
@@ -91,6 +94,14 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     Real dist = 0.0;   // distance traveled so far by the photon 
     Real Lnext = s.grid.minstepsize;
     Real Lresid = 0.0;
+
+    if(threadIdx.x < MAX_TISSUES)
+    {
+        shm_detLoc[threadIdx.x] = detLoc[threadIdx.x];
+        shm_tissueProp[2*threadIdx.x] = tissueProp[2*threadIdx.x];
+        shm_tissueProp[2*threadIdx.x + 1] = tissueProp[2*threadIdx.x + 1];
+    }
+    __syncthreads();
 
     // Initialize the RNG
     gpu_rng_init(t, tnew, g.seed, photonIndex);
@@ -141,7 +152,7 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
                 Lnext += s.grid.minstepsize;
             }
 
-            musr = g.tmusr[tissueIndex];
+            musr = shm_tissueProp[tissueIndex].x;
             step = Lresid * musr;
             // If scattering length is likely within a voxel, jump inside one voxel
             if(s.grid.minstepsize > step) {
@@ -156,7 +167,7 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
             r.z += d.z * step;
             dist += step;
 
-            P2pt *= exp(-(g.tmua[tissueIndex]) * step);
+            P2pt *= exp(-(shm_tissueProp[tissueIndex].y) * step);
             g.lenTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += step;
 
             p.x = DIST2VOX(r.x, s.grid.stepr.x);
@@ -165,8 +176,9 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
         } // Propagate photon
 
         // Calculate the new scattering angle using henyey-greenstein
+
         if(tissueIndex != 0)
-            henyey_greenstein(t, g.tg, g.momTiss, tissueIndex, photonIndex, s.n_photons, &d);
+            henyey_greenstein(t, shm_tissueProp[tissueIndex].z, g.momTiss, tissueIndex, photonIndex, s.n_photons, &d);
     } // loop until end of single photon
 
     // Score exiting photon and save history files
@@ -191,9 +203,9 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
             // Loop through number of detectors
             // Did the photon hit a detector?
             for( i = 0; i < s.det.num; i++ )
-                if( abs(p.x - g.detLoc[i].x) <= s.det.radius &&
-                    abs(p.y - g.detLoc[i].y) <= s.det.radius &&
-                    abs(p.z - g.detLoc[i].z) <= s.det.radius )
+                if( abs(p.x - shm_detLoc[i].x) <= s.det.radius &&
+                    abs(p.y - shm_detLoc[i].y) <= s.det.radius &&
+                    abs(p.z - shm_detLoc[i].z) <= s.det.radius )
                     gpu_set(g.detHit, photonIndex, i);
         }
     }
@@ -252,7 +264,7 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     // TODO: optimize the number of blocks/threads per block.
     // FIXME: as things stand, the kernel will most likely simulate too
     //        many photons; do something about it.
-    run_simulation<<< conf.n_blocks, conf.n_threads_per_block >>>(gmem, sim);
+    run_simulation<<< conf.n_blocks, conf.n_threads_per_block>>>(gmem, sim);
 
     // Make sure all photons have already been simulated before moving on.
     cudaThreadSynchronize();

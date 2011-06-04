@@ -20,7 +20,7 @@
 int main(int argc, char *argv[])
 {
     if (argc != 2) {
-        printf( "usage: tMCimg input_file\n" );
+        printf( "usage: tMCimg input_file.inp\n" );
         exit(1);
     }
 

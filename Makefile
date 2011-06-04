@@ -4,10 +4,10 @@ HOST_SRC = $(wildcard *.cc)
 HOST_OBJ = $(HOST_SRC:%.cc=obj/%.o)
 
 LINK_FLAGS = -m32 -lm
-NVCC_FLAGS = -m32 -use_fast_math -arch=compute_11
+NVCC_FLAGS = -m32
 GCC_FLAGS  = -m32
 
-all: tMCimg 
+all: opt
 
 obj/%.o: %.cu
 	nvcc $(NVCC_FLAGS) -c $< -o $@
@@ -22,6 +22,9 @@ debug: NVCC_FLAGS += -g -G -Xptxas="-v"
 debug: LINK_FLAGS += -g -G
 debug: GCC_FLAGS += -g
 debug: tMCimg
+
+opt: NVCC_FLAGS += -use_fast_math -arch=compute_11
+opt: tMCimg
 
 clean:
 	rm -rf obj/* tMCimg

@@ -49,6 +49,7 @@ typedef float Real;
 #define RAND_SEED_LEN 5     // 32bit seed length (32*5 = 160bits)
 
 #define MAX_DETECTORS 256
+#define MAX_TISSUES 128
 
 typedef struct {
     unsigned char ***tissueType; // type of the tissue within the voxel
@@ -107,11 +108,11 @@ typedef struct {
     unsigned char *tissueType;
 
     // Location (grid) of each detector.
-    int3 *detLoc;
+    //int3 *detLoc;
 
     // Optical properties of the different tissue types.
-    Real *tmusr, *tmua;
-    Real *tg;
+    //Real *tmusr, *tmua;
+    //Real *tg;
 
     // Path length and momentum transfer.
     Real *lenTiss, *momTiss;
@@ -146,6 +147,5 @@ extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
 // TODO: profile, profile, profile.
 //__constant__ Simulation s;
 //__constant__ GPUMemory g;
-//__constant__ int3 detLoc[MAX_DETECTORS];
 
 #endif // _MAIN_H_
