@@ -72,7 +72,7 @@ __device__ void henyey_greenstein(Real *t, Real gg, Real *momTiss, char tissueIn
     }
 }
 
-__global__ void run_simulation(GPUMemory g, Simulation s)
+__global__ void run_simulation(GPUMemory g, Simulation s, int photons_per_run)
 {
     __shared__ int4 shm_detLoc[MAX_DETECTORS + MAX_TISSUES];
     float4 *shm_tissueProp = (float4 *) shm_detLoc + MAX_DETECTORS;
@@ -80,20 +80,15 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     // Loop index
     int i;
 
-    // Random number generation
-    Real t[RAND_BUF_LEN], tnew[RAND_BUF_LEN];
+    int threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
     char tissueIndex;   // tissue type of the current voxel
     int time;           // time elapsed since the photon was launched
     Real step;
     Real musr;
-    int photonIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
-    // Set the photon weight to 1 and initialize photon length parameters
-    Real P2pt = 1.0;   // photon weight
-    Real dist = 0.0;   // distance traveled so far by the photon 
-    Real Lnext = s.grid.minstepsize;
-    Real Lresid = 0.0;
+    // Random number generation
+    Real t[RAND_BUF_LEN], tnew[RAND_BUF_LEN];
 
     if(threadIdx.x < MAX_TISSUES)
     {
@@ -104,7 +99,21 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     __syncthreads();
 
     // Initialize the RNG
-    gpu_rng_init(t, tnew, g.seed, photonIndex);
+    gpu_rng_init(t, tnew, g.seed, threadIndex);
+
+    int photons_run = 0;
+    while(photons_run < photons_per_run)
+    {
+
+    int photonIndex = photons_run + (photons_per_run * threadIndex);
+    photons_run++;
+
+
+    // Set the photon weight to 1 and initialize photon length parameters
+    Real P2pt = 1.0;   // photon weight
+    Real dist = 0.0;   // distance traveled so far by the photon 
+    Real Lnext = s.grid.minstepsize;
+    Real Lresid = 0.0;
 
     // Direction cosines of the photon
     float3 d;
@@ -119,6 +128,7 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
     p.x = DIST2VOX(r.x, s.grid.stepr.x);
     p.y = DIST2VOX(r.y, s.grid.stepr.y);
     p.z = DIST2VOX(r.z, s.grid.stepr.z);
+
 
     // Loop until photon has exceeded its max distance allowed, or escapes
     // the grid.
@@ -209,6 +219,8 @@ __global__ void run_simulation(GPUMemory g, Simulation s)
                     gpu_set(g.detHit, photonIndex, i);
         }
     }
+
+    }
 }
 
 // Make sure the source is at an interface.
@@ -264,7 +276,8 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     // TODO: optimize the number of blocks/threads per block.
     // FIXME: as things stand, the kernel will most likely simulate too
     //        many photons; do something about it.
-    run_simulation<<< conf.n_blocks, conf.n_threads_per_block>>>(gmem, sim);
+    run_simulation<<< conf.n_blocks, conf.n_threads_per_block >>>(gmem, sim, sim.n_photons / conf.n_threads);
+    printf("n_photons / n_threads = %d\n", sim.n_photons / conf.n_threads);
 
     // Make sure all photons have already been simulated before moving on.
     cudaThreadSynchronize();
