@@ -20,8 +20,8 @@
 int read_segmentation_file(Simulation *sim, const char *filename)
 {
     FILE *fp;
-    uchar ***tissueType;
     int i,j,k;
+    uchar ***tissueType;
 
     printf( "Loading target medium volume from %s\n", filename );
 
@@ -33,9 +33,11 @@ int read_segmentation_file(Simulation *sim, const char *filename)
     }
 
     tissueType = (uchar ***) malloc(sim->grid.dim.x * sizeof(uchar **));
-    for( i = 0; i < sim->grid.dim.x; i++ ) {
+    for( i = 0; i < sim->grid.dim.x; i++ )
+    {
         tissueType[i] = (uchar **) malloc(sim->grid.dim.y * sizeof(uchar *));
-        for( j = 0; j < sim->grid.dim.y; j++ ) {
+        for( j = 0; j < sim->grid.dim.y; j++ )
+        {
             tissueType[i][j] = (uchar *) malloc(sim->grid.dim.z * sizeof(uchar));
         }
     }
@@ -91,21 +93,22 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 
 
     fp = fopen( filename, "r" );
-    if( fp == NULL ) {
+    if( fp == NULL )
+    {
         printf( "usage: tMCimg input_file\n" );
         printf( "input_file = %s does not exist.\n", filename );
         exit(1);    // TODO: better error handling (possibly through CUDA?)
     }
 
-    // Read the input file 
-    fscanf( fp, "%d", &n_photons );                         // total number of photons
-    fscanf( fp, "%d", &rand_seed );                         // random number seed
+    // Read the input file .
+    fscanf( fp, "%d", &n_photons );     // total number of photons
+    fscanf( fp, "%d", &rand_seed );     // random number seed
     fscanf( fp, "%f %f %f", &src_pos.x, &src_pos.y, &src_pos.z );    // source location
-    fscanf( fp, "%f %f %f", &src_dir.x, &src_dir.y, &src_dir.z );    // source src_direction
-    fscanf( fp, "%lf %lf %lf", &minT, &maxT, &stepT );      // min, max, step time for recording
-    fscanf( fp, "%s", segFile );                            // file containing tissue structure
+    fscanf( fp, "%f %f %f", &src_dir.x, &src_dir.y, &src_dir.z );    // source direction
+    fscanf( fp, "%lf %lf %lf", &minT, &maxT, &stepT );  // min, max, step time for recording
+    fscanf( fp, "%s", segFile );                        // file containing tissue structure
 
-    // Read image dimensions
+    // Read image dimensions.
     fscanf( fp, "%f %d %d %d", &vox_dim.x, &grid_dim.x, &Imin.x, &Imax.x );
     fscanf( fp, "%f %d %d %d", &vox_dim.y, &grid_dim.y, &Imin.y, &Imax.y );
     fscanf( fp, "%f %d %d %d", &vox_dim.z, &grid_dim.z, &Imin.z, &Imax.z );
@@ -114,21 +117,22 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     nIstep.y = Imax.y - Imin.y + 1;
     nIstep.z = Imax.z - Imin.z + 1;
 
-    // Read number of tissue types and their optical properties
+    // Read number of tissue types and their optical properties.
     fscanf( fp, "%d", &n_tissues );
-    // Index 0 is used as a flag
+    // index 0 is used as a flag
     tissProp = (float4 *) malloc((n_tissues + 1) * sizeof(float4));
     tissProp[0].x = (1.0 / -999.0);
     tissProp[0].y = -999.0;
     tissProp[0].z = -999.0;
     tissProp[0].w = -999.0;
-    for( i = 1; i <= n_tissues; i++ ) {
+    for( i = 1; i <= n_tissues; i++ )
+    {
         float tmus;
-        // TODO: allow Real = double as well
+        // TODO: allow float = double as well
         fscanf( fp, "%f %f %f %f", &tmus, &tissProp[i].y, &tissProp[i].z, &tissProp[i].w );
-        if( tissProp[i].w != 1.0 ) {
+        if( tissProp[i].w != 1.0 )
+        {
             printf( "WARNING: The code does not yet support n != 1.0\n" );
-            printf( "tn[%d] = %f\n", i, tissProp[i].w );
         }
         if( tmus == 0.0 ) {
             printf( "ERROR: The code does not support mus = 0.0\n" );
@@ -144,10 +148,10 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     float radius;
     fscanf( fp, "%d %f", &num_dets, &radius);
 
+    double det_x, det_y, det_z;
     det = (int4 *) malloc(num_dets * sizeof(int4));
-    for( i = 0; i < num_dets; i++ ) {
-        double det_x, det_y, det_z;
-
+    for( i = 0; i < num_dets; i++ )
+    {
         fscanf( fp, "%lf %lf %lf", &det_x, &det_y, &det_z);
         det[i].x = (int) (det_x / vox_dim.x) - 1;
         det[i].y = (int) (det_y / vox_dim.y) - 1;
@@ -167,21 +171,21 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     else
         max_time = ceil(max_time_float);
 
-    // Get the minimum dimension
+    // Get the minimum dimension.
     minstepsize = MIN(vox_dim.x, MIN(vox_dim.y, vox_dim.z)); 
 
-    // Normalize the direction cosine of the source
-    Real foo = sqrt(src_dir.x*src_dir.x + src_dir.y*src_dir.y + src_dir.z*src_dir.z);
+    // Normalize the direction cosine of the source.
+    float foo = sqrt(src_dir.x*src_dir.x + src_dir.y*src_dir.y + src_dir.z*src_dir.z);
     src_dir.x /= foo;
     src_dir.y /= foo;
     src_dir.z /= foo;
 
-    // Calculate the min and max photon length from the min and max propagation times
+    // Calculate the min and max photon length from the min and max propagation times.
     max_length = maxT * C_VACUUM / tissProp[1].w;
     min_length = minT * C_VACUUM / tissProp[1].w;
-    stepL = stepT * C_VACUUM / tissProp[1].w;
+    stepL     = stepT * C_VACUUM / tissProp[1].w;
 
-    // Copy data to the simulation struct
+    // Copy data to the simulation struct.
     sim->max_time = max_time;
     sim->min_length = min_length;
     sim->max_length = max_length;
@@ -230,12 +234,12 @@ void write_results(Simulation sim, const char *input_filename)
 
     if( sim.det.num != 0 )
     {
-        for(photonIndex = 0; photonIndex < sim.n_photons; photonIndex++)
+        for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
         {
             // Loop through number of detectors
             for( i = 0; i < sim.det.num; i++ )
             {
-                if(bitset_get(sim.detHit, photonIndex, i) == 1)
+                if( bitset_get(sim.detHit, photonIndex, i) == 1 )
                 {
                     // Write to the history file
                     fwrite(&i, sizeof(int), 1, history);
@@ -244,11 +248,7 @@ void write_results(Simulation sim, const char *input_filename)
                         k = LIN2D(photonIndex, j, sim.n_photons);
                         fwrite(&sim.lenTiss[k], sizeof(float), 1, history);
                         fprintf(pathlength, "%f\n", sim.lenTiss[k]);
-                    }
-                    for( j = 1; j <= sim.tiss.num; j++ )
-                    {
-                        k = LIN2D(photonIndex, j, sim.n_photons);
-                        fprintf(momentum, "%f\n", sim.momTiss[k]);       
+                        fprintf(momentum,   "%f\n", sim.momTiss[k]);       
                     }
                 }
             }
@@ -274,7 +274,7 @@ void write_results(Simulation sim, const char *input_filename)
     sprintf( filename, "%s.2pt", input_filename );
     fluence = fopen( filename, "wb" );
     if(fluence != NULL) {
-        fwrite( sim.II, sizeof(Real), sim.grid.nIxyz * sim.max_time, fluence );
+        fwrite( sim.II, sizeof(float), sim.grid.nIxyz * sim.max_time, fluence );
     } else {
         printf( "ERROR: unable to save to %s\n", filename );
         exit(1);

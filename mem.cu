@@ -28,14 +28,16 @@ void linearize_3d(type ***t, type *l, int dim_x, int dim_y, int dim_z)
 
 void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 {
-    Real *d_II;
-    Real *d_lenTiss, *d_momTiss;
+    float *d_II;
+    float *d_lenTiss, *d_momTiss;
     uint *d_detHit_matrix;
     uint *h_seed, *d_seed;
     uchar *h_linear_tissueType, *d_tissueType;
+    int4 *d_detLoc;
+    float4 *d_tissueProp;
     size_t num_tissueArrays, num_II, sizeof_seed;
 
-    // Total number of voxel elements
+    // Calculate the total number of voxel elements.
     int grid_dim = sim->grid.dim.x * sim->grid.dim.y * sim->grid.dim.z;
 
     // Linearize tissueType so that it can be converted into a cudaArray
@@ -46,42 +48,49 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Setup the path length and momentum transfer arrays.
     num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
-    sim->lenTiss = (Real *) calloc(num_tissueArrays, sizeof(Real));
-    sim->momTiss = (Real *) calloc(num_tissueArrays, sizeof(Real));
+    sim->lenTiss = (float *) calloc(num_tissueArrays, sizeof(float));
+    sim->momTiss = (float *) calloc(num_tissueArrays, sizeof(float));
 
     // Photon fluence.
     num_II = sim->grid.nIxyz * sim->max_time;
-    sim->II = (Real *) calloc(num_II, sizeof(Real));
+    sim->II = (float *) calloc(num_II, sizeof(float));
 
     // Bitset indicating which detectors (if any) were hit by which photons.
     sim->detHit = bitset_new(sim->n_photons, sim->det.num);
 
     // Seed used by the RNG.
-    sizeof_seed = sizeof(uint) * conf.n_threads * RAND_SEED_LEN;
+    sizeof_seed = conf.n_threads * RAND_SEED_LEN * sizeof(uint);
     h_seed = (uint *) malloc(sizeof_seed);
-    for(int i = 0; i < conf.n_threads * RAND_SEED_LEN; i++)
+    for( int i = 0; i < conf.n_threads * RAND_SEED_LEN; i++ )
         h_seed[i] = rand();
 
     // Allocate memory on the GPU global memory.
     // TODO: use constant memory where appropriate 
+    cudaMalloc((void **) &d_detLoc, sim->det.num * sizeof(int4));
+    cudaMalloc((void **) &d_tissueProp, (sim->tiss.num + 1) * sizeof(float4));
     cudaMalloc((void **) &d_tissueType, grid_dim * sizeof(uchar));
-    cudaMalloc((void **) &d_lenTiss,  num_tissueArrays * sizeof(Real));
-    cudaMalloc((void **) &d_momTiss,  num_tissueArrays * sizeof(Real));
-    cudaMalloc((void **) &d_II,       num_II           * sizeof(Real));
+    cudaMalloc((void **) &d_lenTiss, num_tissueArrays * sizeof(float));
+    cudaMalloc((void **) &d_momTiss, num_tissueArrays * sizeof(float));
+    cudaMalloc((void **) &d_II,      num_II           * sizeof(float));
     cudaMalloc((void **) &d_detHit_matrix, bitset_size(sim->detHit) * sizeof(uint));
     cudaMalloc((void **) &d_seed, sizeof_seed);
 
     // Copy simulation memory to the GPU.
-    cudaMemcpyToSymbol("detLoc", sim->det.info, sim->det.num * sizeof(int4));
-    cudaMemcpyToSymbol("tissueProp", sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
+    //cudaMemcpyToSymbol("detLoc", sim->det.info, sim->det.num * sizeof(int4));
+    //cudaMemcpyToSymbol("tissueProp", sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
+    cudaMemcpyToSymbol("s", sim, sizeof(Simulation));
+    TO_DEVICE(d_detLoc, sim->det.info, sim->det.num * sizeof(int4));
+    TO_DEVICE(d_tissueProp, sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
     TO_DEVICE(d_tissueType, h_linear_tissueType, grid_dim * sizeof(uchar));
-    TO_DEVICE(d_lenTiss, sim->lenTiss,      num_tissueArrays * sizeof(Real));
-    TO_DEVICE(d_momTiss, sim->momTiss,      num_tissueArrays * sizeof(Real));
-    TO_DEVICE(d_II,      sim->II,           num_II           * sizeof(Real));
+    TO_DEVICE(d_lenTiss, sim->lenTiss, num_tissueArrays * sizeof(float));
+    TO_DEVICE(d_momTiss, sim->momTiss, num_tissueArrays * sizeof(float));
+    TO_DEVICE(d_II,      sim->II,      num_II           * sizeof(float));
     TO_DEVICE(d_detHit_matrix, sim->detHit.matrix, bitset_size(sim->detHit) * sizeof(uint));
     TO_DEVICE(d_seed, h_seed, sizeof_seed);
 
     // Update GPU memory structure (so that its pointers can be used elsewhere).
+    gmem->detLoc = d_detLoc;
+    gmem->tissueProp = d_tissueProp;
     gmem->tissueType = d_tissueType;
     gmem->lenTiss = d_lenTiss;
     gmem->momTiss = d_momTiss;
@@ -89,6 +98,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     gmem->detHit = sim->detHit;
     gmem->detHit.matrix = d_detHit_matrix;
     gmem->seed = d_seed;
+    cudaMemcpyToSymbol("g", gmem, sizeof(GPUMemory));
 
     // Free temporary memory used on the host.
     free(h_linear_tissueType);
@@ -109,9 +119,11 @@ void free_mem(Simulation sim, GPUMemory gmem)
 
     // Detectors' locations and radii.
     free(sim.det.info);
+    cudaFree(gmem.detLoc);
 
     // Optical properties of the different tissue types.
     free(sim.tiss.prop);
+    cudaFree(gmem.tissueProp);
 
     // Path length and momentum transfer.
     free(sim.lenTiss);
@@ -133,8 +145,8 @@ void free_mem(Simulation sim, GPUMemory gmem)
 
 void retrieve(Simulation *sim, GPUMemory *gmem)
 {
-    size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(Real);
-    size_t sizeof_II = sim->grid.nIxyz * sim->max_time * sizeof(Real);
+    size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(float);
+    size_t sizeof_II = sim->grid.nIxyz * sim->max_time * sizeof(float);
     size_t sizeof_detHit = bitset_size(sim->detHit) * sizeof(uint);
 
     TO_HOST(sim->lenTiss, gmem->lenTiss, sizeof_tissueArrays);

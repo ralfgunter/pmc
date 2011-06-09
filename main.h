@@ -22,10 +22,11 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 #include "bitset2d.h"
 
-#define PI M_PI
+#define PI 3.1415926535897932
 #define C_VACUUM 2.9979e11
 #define FP_DIV_ERR 1e-8
 #define EPS 2.2204e-16
@@ -42,7 +43,7 @@
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
-typedef float Real;
+//typedef float float;
 
 // TODO: find a better place for this?
 #define RAND_BUF_LEN  5     // Register arrays
@@ -55,7 +56,7 @@ typedef struct {
     unsigned char ***tissueType; // type of the tissue within the voxel
     int3 dim;       // dimensions of the image file
     float3 stepr;   // inverse of voxel dimensions
-    Real minstepsize;
+    float minstepsize;
 
     // Apparently this restricts the photon fluence calculation to within
     // a box outlined by the following coordinates.
@@ -84,13 +85,13 @@ typedef struct {
 typedef struct {
     int n_photons;
 
-    Real min_length, max_length;
-    Real stepT, stepLr;
-    Real max_time;
+    float min_length, max_length;
+    float stepT, stepLr;
+    float max_time;
     Bitset2D detHit;
 
-    Real *lenTiss, *momTiss;
-    Real *II;
+    float *lenTiss, *momTiss;
+    float *II;
 
     Grid grid;
     Source src;
@@ -104,16 +105,16 @@ typedef struct {
     unsigned char *tissueType;
 
     // Location (grid) of each detector, plus its radius.
-    //int4 *detLoc;
+    int4 *detLoc;
 
     // Optical properties of the different tissue types.
-    //float4 *prop;
+    float4 *tissueProp;
 
     // Path length and momentum transfer.
-    Real *lenTiss, *momTiss;
+    float *lenTiss, *momTiss;
 
     // Photon fluence
-    Real *II;
+    float *II;
 
     // Bitset of detectors hit by a given photon packet.
     Bitset2D detHit;
