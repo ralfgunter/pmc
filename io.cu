@@ -10,7 +10,7 @@
 * License:  4-clause BSD License, see LICENSE for details                       *
 *                                                                               *
 * Example:                                                                      *
-*         tMCimg input.inp                                                      *
+*         pmc input.inp                                                      *
 *                                                                               *
 * Please find more details in README and doc/HELP                               *
 ********************************************************************************/
@@ -95,9 +95,8 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     fp = fopen( filename, "r" );
     if( fp == NULL )
     {
-        printf( "usage: tMCimg input_file\n" );
         printf( "input_file = %s does not exist.\n", filename );
-        exit(1);    // TODO: better error handling (possibly through CUDA?)
+        return -1;    // TODO: better error handling (possibly through CUDA?)
     }
 
     // Read the input file .
@@ -224,25 +223,28 @@ void write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *momentum, *pathlength;
     char filename[128];
-    int i, j, k, photonIndex;
+    //int i, j, k, photonIndex;
 
     // TODO: check for errors
-    sprintf( filename, "%s.his", input_filename );
-    history    = fopen( filename, "wb" );
-    momentum   = fopen( "momentum_transfer", "wb" );
-    pathlength = fopen( "pathlength", "wb" );
+    //sprintf( filename, "%s.his", input_filename );
+    //history = fopen( filename, "wb" );
+    //sprintf( filename, "%s_momentum_transfer", input_filename );
+    //momentum = fopen( "momentum_transfer", "wb" );
+    //sprintf( filename, "%s_pathlength", input_filename );
+    //pathlength = fopen( "pathlength", "wb" );
 
+/*
     if( sim.det.num != 0 )
     {
         for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
         {
             // Loop through number of detectors
-            for( i = 0; i < sim.det.num; i++ )
+            for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
             {
-                if( bitset_get(sim.detHit, photonIndex, i) == 1 )
+                if( bitset_get(sim.detHit, photonIndex, detIndex) == 1 )
                 {
                     // Write to the history file
-                    fwrite(&i, sizeof(int), 1, history);
+                    fwrite(&detIndex, sizeof(int), 1, history);
                     for( j = 1; j <= sim.tiss.num; j++ )
                     {
                         k = LIN2D(photonIndex, j, sim.n_photons);
@@ -254,6 +256,7 @@ void write_results(Simulation sim, const char *input_filename)
             }
         }
     }
+*/
 
 /*    
     // If there are no detectors, then save exit position.
@@ -281,8 +284,22 @@ void write_results(Simulation sim, const char *input_filename)
     }
 
     // Close file handlers.
-    fclose(history);
+    //fclose(history);
     fclose(fluence);
-    fclose(momentum);
-    fclose(pathlength);
+    //fclose(momentum);
+    //fclose(pathlength);
 }
+
+void parse_conf(ExecConfig *conf, int n_threads_per_block, int n_threads, int n_iterations)
+{
+    conf->n_threads_per_block = n_threads_per_block;
+    conf->n_threads = n_threads;
+    conf->n_blocks = conf->n_threads / conf->n_threads_per_block;
+    conf->n_iterations = n_iterations;
+
+    if(conf->rand_seed > 0)
+        srand(conf->rand_seed);
+    else
+        srand(time(NULL));
+}
+

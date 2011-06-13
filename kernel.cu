@@ -19,10 +19,14 @@
 #include "logistic_rand_kernel.h"
 #include "bitset2d_kernel.h"
 
-#define timed_LIN3D(i,j,k,time,grid) (time * grid.nIxyz + \
-                                      ((k) - grid.Imin.z) * grid.nIxy + \
-                                      ((j) - grid.Imin.y) * grid.nIstep.x + \
-                                      ((i) - grid.Imin.x))
+#define LIN(i,j,k,time,grid) (time * grid.nIxyz + \
+                              ((k) - grid.Imin.z) * grid.nIxy + \
+                              ((j) - grid.Imin.y) * grid.nIstep.x + \
+                              ((i) - grid.Imin.x))
+#define MOVE(p, r, stepr) \
+        (p).x = (r).x * (stepr).x; \
+        (p).y = (r).y * (stepr).y; \
+        (p).z = (r).z * (stepr).z
 
 //__constant__ int4 detLoc[MAX_DETECTORS];
 //__constant__ float4 tissueProp[MAX_TISSUES];
@@ -30,7 +34,7 @@ __constant__ Simulation s;
 __constant__ GPUMemory g;
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int photonIndex, int n_photons, float3 *d)
+__device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int photonIndex, float3 *d)
 {
     float3 d0;
     float rand;
@@ -59,7 +63,7 @@ __device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int phot
 
     /*
     if(theta > 0)
-        g.momTiss[LIN2D(photonIndex, tissueIndex, n_photons)] += 1 - ctheta;
+        g.momTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += 1 - ctheta;
     */
 
     d0.x = d->x;
@@ -76,10 +80,10 @@ __device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int phot
     }
 }
 
-__global__ void run_simulation(int photons_per_run)
+__global__ void run_simulation(int photons_per_thread, int iteration)
 {
-    __shared__ int4 shm_detLoc[MAX_DETECTORS + MAX_TISSUES];
-    float4 *shm_tissueProp = (float4 *) shm_detLoc + MAX_DETECTORS;
+    __shared__ int4 detLoc[MAX_DETECTORS + MAX_TISSUES];
+    float4 *tissueProp = (float4 *) detLoc + MAX_DETECTORS;
 
     // Loop index
     int i;
@@ -96,9 +100,9 @@ __global__ void run_simulation(int photons_per_run)
 
     //if(threadIdx.x < MAX_TISSUES)
     //{
-        shm_detLoc[threadIdx.x] = g.detLoc[threadIdx.x];
-        shm_tissueProp[2*threadIdx.x] = g.tissueProp[2*threadIdx.x];
-        shm_tissueProp[2*threadIdx.x + 1] = g.tissueProp[2*threadIdx.x + 1];
+        //detLoc[threadIdx.x] = g.detLoc[threadIdx.x];
+        tissueProp[2*threadIdx.x] = g.tissueProp[2*threadIdx.x];
+        tissueProp[2*threadIdx.x + 1] = g.tissueProp[2*threadIdx.x + 1];
     //}
     __syncthreads();
 
@@ -106,9 +110,9 @@ __global__ void run_simulation(int photons_per_run)
     gpu_rng_init(t, tnew, g.seed, threadIndex);
 
     int photons_run = 0;
-    while(photons_run < photons_per_run)
+    while(photons_run < photons_per_thread)
     {
-        int photonIndex = LIN2D(photons_run, photons_per_run, threadIndex);
+        int photonIndex = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
         photons_run++;
 
         // Set the photon weight to 1 and initialize photon length parameters
@@ -127,10 +131,7 @@ __global__ void run_simulation(int photons_per_run)
 
         // Photon position (grid)
         int3 p;
-        p.x = DIST2VOX(r.x, s.grid.stepr.x);
-        p.y = DIST2VOX(r.y, s.grid.stepr.y);
-        p.z = DIST2VOX(r.z, s.grid.stepr.z);
-
+        MOVE(p, r, s.grid.stepr);
 
         // Loop until photon has exceeded its max distance allowed, or escapes
         // the grid.
@@ -145,7 +146,7 @@ __global__ void run_simulation(int photons_per_run)
             // Calculate scattering length
             Lresid = rand_next_scatlen(t);
 
-            while( dist < s.max_length && Lresid > 0.0 &&
+            while( Lresid > 0.0 && dist < s.max_length &&
                    p.x >= 0 && p.x < s.grid.dim.x &&
                    p.y >= 0 && p.y < s.grid.dim.y &&
                    p.z >= 0 && p.z < s.grid.dim.z &&
@@ -159,17 +160,17 @@ __global__ void run_simulation(int photons_per_run)
                         p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
                         p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
                         time < s.max_time )
-                         g.II[timed_LIN3D(p.x, p.y, p.z, time, s.grid)] += P2pt;
+                        g.II[LIN(p.x, p.y, p.z, time, s.grid)] += P2pt;
 
                     Lnext += s.grid.minstepsize;
                 }
 
-                musr = shm_tissueProp[tissueIndex].x;
+                musr = tissueProp[tissueIndex].x;
                 step = Lresid * musr;
                 // If scattering length is likely within a voxel, jump inside one voxel
                 if(s.grid.minstepsize > step) {
                     Lresid = 0.0;
-                } else {   // If scattering length is bigger than a voxel, then move 1 voxel
+                } else {   // If scattering length is bigger than a voxel, then move one voxel
                     step = s.grid.minstepsize;
                     Lresid -= musr * s.grid.minstepsize;
                 }
@@ -179,45 +180,44 @@ __global__ void run_simulation(int photons_per_run)
                 r.z += d.z * step;
                 dist += step;
 
-                P2pt *= expf(-(shm_tissueProp[tissueIndex].y) * step);
+                P2pt *= expf(-(tissueProp[tissueIndex].y) * step);
                 //g.lenTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += step;
 
-                p.x = DIST2VOX(r.x, s.grid.stepr.x);
-                p.y = DIST2VOX(r.y, s.grid.stepr.y);
-                p.z = DIST2VOX(r.z, s.grid.stepr.z);
+                MOVE(p, r, s.grid.stepr);
             } // Propagate photon
 
             // Calculate the new scattering angle using henyey-greenstein
             if(tissueIndex != 0)
-                henyey_greenstein(t, shm_tissueProp[tissueIndex].z, tissueIndex, photonIndex, s.n_photons, &d);
+                henyey_greenstein(t, tissueProp[tissueIndex].z, tissueIndex, photonIndex, &d);
         } // loop until end of single photon
 
         // Score exiting photon and save history files
-        p.x = DIST2VOX(r.x, s.grid.stepr.x);
-        p.y = DIST2VOX(r.y, s.grid.stepr.y);
-        p.z = DIST2VOX(r.z, s.grid.stepr.z);
+        MOVE(p, r, s.grid.stepr);
 
         if ( p.x >= 0 && p.x < s.grid.dim.x &&
              p.y >= 0 && p.y < s.grid.dim.y &&
              p.z >= 0 && p.z < s.grid.dim.z )
         {
+            //tissueIndex = tex3D(tissueType, p.x, p.y, p.z);
             tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
-            if( tissueIndex == 0 )
+            if(tissueIndex == 0)
             {
                 time = (int) ((dist - s.min_length) * s.stepLr);
                 if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
                     p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
                     p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
                     time < s.max_time )
-                    g.II[timed_LIN3D(p.x, p.y, p.z, time, s.grid)] -= P2pt;
+                    g.II[LIN(p.x, p.y, p.z, time, s.grid)] -= P2pt;
 
+                /*
                 // Loop through number of detectors
                 // Did the photon hit a detector?
                 for( i = 0; i < s.det.num; i++ )
-                    if( abs(p.x - shm_detLoc[i].x) <= shm_detLoc[i].w &&
-                        abs(p.y - shm_detLoc[i].y) <= shm_detLoc[i].w &&
-                        abs(p.z - shm_detLoc[i].z) <= shm_detLoc[i].w )
+                    if( absf(p.x - detLoc[i].x) <= detLoc[i].w &&
+                        absf(p.y - detLoc[i].y) <= detLoc[i].w &&
+                        absf(p.z - detLoc[i].z) <= detLoc[i].w )
                         gpu_set(g.detHit, photonIndex, i);
+                */
             }
         }
     }
@@ -227,59 +227,58 @@ __global__ void run_simulation(int photons_per_run)
 void correct_source(Simulation *sim)
 {
     char tissueIndex;
-    int i, j, k;
-    float x0, y0, z0;
+    int3 p;
+    float3 r0;
 
     // Source's position (euclidean).
-    x0 = sim->src.r.x;
-    y0 = sim->src.r.y;
-    z0 = sim->src.r.z;
+    r0.x = sim->src.r.x; r0.y = sim->src.r.y; r0.z = sim->src.r.z;
 
-    i = DIST2VOX(x0, sim->grid.stepr.x);
-    j = DIST2VOX(y0, sim->grid.stepr.y);
-    k = DIST2VOX(z0, sim->grid.stepr.z);
+    MOVE(p, r0, sim->grid.stepr);
 
-    tissueIndex = sim->grid.tissueType[i][j][k];
+    tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
 
     while( tissueIndex != 0 &&
-           i > 0 && i < sim->grid.dim.x &&
-           j > 0 && j < sim->grid.dim.y &&
-           k > 0 && k < sim->grid.dim.z )
+           p.x > 0 && p.x < sim->grid.dim.x &&
+           p.y > 0 && p.y < sim->grid.dim.y &&
+           p.z > 0 && p.z < sim->grid.dim.z )
     {
-        x0 -= sim->src.d.x * sim->grid.minstepsize;
-        y0 -= sim->src.d.y * sim->grid.minstepsize;
-        z0 -= sim->src.d.z * sim->grid.minstepsize;
-        i = DIST2VOX(x0, sim->grid.stepr.x);
-        j = DIST2VOX(y0, sim->grid.stepr.y);
-        k = DIST2VOX(z0, sim->grid.stepr.z);
-        tissueIndex = sim->grid.tissueType[i][j][k];
+        r0.x -= sim->src.d.x * sim->grid.minstepsize;
+        r0.y -= sim->src.d.y * sim->grid.minstepsize;
+        r0.z -= sim->src.d.z * sim->grid.minstepsize;
+        MOVE(p, r0, sim->grid.stepr);
+        tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
     }
     while( tissueIndex == 0 )
     {
-        x0 += sim->src.d.x * sim->grid.minstepsize;
-        y0 += sim->src.d.y * sim->grid.minstepsize;
-        z0 += sim->src.d.z * sim->grid.minstepsize;
-        i = DIST2VOX(x0, sim->grid.stepr.x);
-        j = DIST2VOX(y0, sim->grid.stepr.y);
-        k = DIST2VOX(z0, sim->grid.stepr.z);
-        tissueIndex = sim->grid.tissueType[i][j][k];
+        r0.x += sim->src.d.x * sim->grid.minstepsize;
+        r0.y += sim->src.d.y * sim->grid.minstepsize;
+        r0.z += sim->src.d.z * sim->grid.minstepsize;
+        MOVE(p, r0, sim->grid.stepr);
+        tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
     }
 
     // Update the source coordinates 
-    sim->src.r.x = x0;
-    sim->src.r.y = y0;
-    sim->src.r.z = z0;
+    sim->src.r.x = r0.x;
+    sim->src.r.y = r0.y;
+    sim->src.r.z = r0.z;
 }
 
 void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
 {
-    // TODO: optimize the number of blocks/threads per block.
     // FIXME: as things stand, the kernel will most likely simulate too
     //        many photons; do something about it.
-    int photons_per_thread = sim.n_photons / conf.n_threads;
-    run_simulation<<< conf.n_blocks, conf.n_threads_per_block >>>(photons_per_thread);
-    printf("photons per thread = %d\n", photons_per_thread);
+    int photons_per_iteration = sim.n_photons / conf.n_iterations;
+    int photons_per_thread = photons_per_iteration / conf.n_threads;
+    int iteration = 0;
 
-    // Make sure all photons have already been simulated before moving on.
-    cudaThreadSynchronize();
+    printf("photons per thread = %d\n", photons_per_thread);
+    printf("photons per iteration = %d\n", photons_per_iteration);
+
+    for(iteration = 0; iteration < conf.n_iterations; iteration++)
+    {
+        run_simulation<<< conf.n_blocks, conf.n_threads_per_block >>>(photons_per_thread, iteration);
+
+        // Make sure all photons have already been simulated before moving on.
+        cudaThreadSynchronize();
+    }
 }

@@ -24,6 +24,9 @@
 #include <string.h>
 #include <time.h>
 
+//#include "cutil_inline.h"
+//#include "cutil_math.h"
+
 #include "bitset2d.h"
 
 #define PI 3.1415926535897932
@@ -43,7 +46,6 @@
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
-//typedef float float;
 
 // TODO: find a better place for this?
 #define RAND_BUF_LEN  5     // Register arrays
@@ -53,7 +55,7 @@ typedef unsigned char uchar;
 #define MAX_TISSUES 128
 
 typedef struct {
-    unsigned char ***tissueType; // type of the tissue within the voxel
+    uchar ***tissueType; // type of the tissue within the voxel
     int3 dim;       // dimensions of the image file
     float3 stepr;   // inverse of voxel dimensions
     float minstepsize;
@@ -102,7 +104,7 @@ typedef struct {
 // Structure holding pointers to the GPU global memory.
 typedef struct {
     // Tissue type index of each voxel.
-    unsigned char *tissueType;
+    uchar *tissueType;
 
     // Location (grid) of each detector, plus its radius.
     int4 *detLoc;
@@ -125,6 +127,7 @@ typedef struct {
 
 typedef struct {
     int n_blocks, n_threads, n_threads_per_block;
+    int n_iterations;
     int rand_seed;
 } ExecConfig;
 
@@ -138,5 +141,8 @@ extern void retrieve(Simulation *sim, GPUMemory *gmem);
 extern void write_results(Simulation sim, const char *input_filename);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
+extern void parse_conf(ExecConfig *conf, int n_threads_per_block, int n_threads, int n_iterations);
+
+//texture<uchar, cudaTextureType3D, cudaReadModeElementType> tissueType;
 
 #endif // _MAIN_H_

@@ -9,18 +9,14 @@
 *                                                                               *
 * License:  4-clause BSD License, see LICENSE for details                       *
 *                                                                               *
-* Example:                                                                      *
-*         tMCimg input.inp                                                      *
-*                                                                               *
-* Please find more details in README and doc/HELP                               *
 ********************************************************************************/
 
 #include "main.h"
 
 int main(int argc, char *argv[])
 {
-    if (argc != 4) {
-        printf( "usage: tMCimg input_file.inp threads_per_block n_threads\n" );
+    if (argc != 5) {
+        printf( "usage: %s input_file.inp threads_per_block n_threads n_iterations\n", argv[0]);
         exit(1);
     }
 
@@ -31,18 +27,15 @@ int main(int argc, char *argv[])
     // Parse .inp file into the simulation structure.
     read_input(&conf, &sim, argv[1]);
 
-    // TODO: put these somewhere else, and explain why the numbers are such
-    int n = atoi(argv[2]);
+    int n_threads_per_block = atoi(argv[2]);
     int n_threads = atoi(argv[3]);
-    conf.n_threads_per_block = n;
-    conf.n_threads = n_threads;
-    conf.n_blocks = conf.n_threads / conf.n_threads_per_block;
-    printf("#blocks = %d\nthreads per block = %d\n", conf.n_blocks, conf.n_threads_per_block);
-    printf("#photons = %d\n#threads = %d\n", sim.n_photons, conf.n_threads);
-    if(conf.rand_seed > 0)
-        srand(conf.rand_seed);
-    else
-        srand(time(NULL));
+    int n_iterations = atoi(argv[4]);
+    parse_conf(&conf, n_threads_per_block, n_threads, n_iterations);
+
+    printf("blocks = %d\nthreads = %d\n", conf.n_blocks, conf.n_threads);
+    printf("photons = %d\nthreads per block = %d\n", sim.n_photons, conf.n_threads_per_block);
+
+    // Make sure the source is at an interface.
     correct_source(&sim);
 
     // Allocate and initialize memory to be used by the GPU.
