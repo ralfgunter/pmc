@@ -135,14 +135,12 @@ typedef struct {
 // TODO: Should we be consistent with the arguments, even though
 //       it's not necessary? Investigate.
 extern int read_input(ExecConfig *conf, Simulation *sim, const char *input_filename);
+extern int write_results(Simulation sim, const char *input_filename);
 extern void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
 extern void free_mem(Simulation sim, GPUMemory gmem); 
 extern void retrieve(Simulation *sim, GPUMemory *gmem);
-extern void write_results(Simulation sim, const char *input_filename);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
 extern void parse_conf(ExecConfig *conf, int n_threads_per_block, int n_threads, int n_iterations);
-
-//texture<uchar, cudaTextureType3D, cudaReadModeElementType> tissueType;
 
 #endif // _MAIN_H_

@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
     parse_conf(&conf, n_threads_per_block, n_threads, n_iterations);
 
     printf("blocks = %d\nthreads = %d\n", conf.n_blocks, conf.n_threads);
-    printf("photons = %d\nthreads per block = %d\n", sim.n_photons, conf.n_threads_per_block);
+    printf("photons = %d\n", sim.n_photons);
 
     // Make sure the source is at an interface.
     correct_source(&sim);

@@ -36,38 +36,10 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     // Calculate the total number of voxel elements.
     int grid_dim = sim->grid.dim.x * sim->grid.dim.y * sim->grid.dim.z;
 
-    // Linearize tissueType so that it can be converted into a cudaArray
-    // and later bound to a 3d texture.
+    // Linearize tissueType, as CUDA cannot handle pointers to pointers.
     h_linear_tissueType = (uchar *) malloc(grid_dim * sizeof(uchar));
     linearize_3d(sim->grid.tissueType, h_linear_tissueType,
                  sim->grid.dim.x, sim->grid.dim.y, sim->grid.dim.z);
-
-/*
-    cudaArray *d_volumeArray = 0;
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<uchar>();
-    const cudaExtent volumeSize = make_cudaExtent(sim->grid.dim.x,
-                                                  sim->grid.dim.y,
-                                                  sim->grid.dim.z);
-    cutilSafeCall( cudaMalloc3DArray(&d_volumeArray, &channelDesc, volumeSize) );
-
-    // copy data to 3D array
-    cudaMemcpy3DParms copyParams = {0};
-    copyParams.srcPtr   = make_cudaPitchedPtr((void*)h_linear_tissueType, volumeSize.width*sizeof(uchar), volumeSize.width, volumeSize.height);
-    copyParams.dstArray = d_volumeArray;
-    copyParams.extent   = volumeSize;
-    copyParams.kind     = cudaMemcpyHostToDevice;
-    cutilSafeCall( cudaMemcpy3D(&copyParams) );
-
-    // set texture parameters
-    tissueType.normalized = false;   // access with normalized texture coordinates
-    tissueType.filterMode = cudaFilterModeLinear;      // linear interpolation
-    tissueType.addressMode[0] = cudaAddressModeWrap;   // wrap tissueTypeture coordinates
-    tissueType.addressMode[1] = cudaAddressModeWrap;
-    tissueType.addressMode[2] = cudaAddressModeWrap;
-
-    // bind array to 3D texture
-    cutilSafeCall( cudaBindTextureToArray(tissueType, d_volumeArray, channelDesc) );
-*/
 
     // Setup the path length and momentum transfer arrays.
     //num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
@@ -139,7 +111,6 @@ void free_mem(Simulation sim, GPUMemory gmem)
     }
     free(sim.grid.tissueType);
     cudaFree(gmem.tissueType);
-    //cudaUnbindTexture(tissueType);
 
     // Detectors' locations and radii.
     //free(sim.det.info);

@@ -198,7 +198,6 @@ __global__ void run_simulation(int photons_per_thread, int iteration)
              p.y >= 0 && p.y < s.grid.dim.y &&
              p.z >= 0 && p.z < s.grid.dim.z )
         {
-            //tissueIndex = tex3D(tissueType, p.x, p.y, p.z);
             tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
             if(tissueIndex == 0)
             {

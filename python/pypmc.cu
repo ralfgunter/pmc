@@ -19,7 +19,7 @@ pypmc_dealloc( PyPMC *self )
     free_mem(self->sim, self->gmem);
 
     // Finally, delete the pypmc object itself.
-    self->ob_type->tp_free((PyObject *) self);
+    Py_TYPE(self)->tp_free((PyObject*) self);
 }
 
 static PyObject *
@@ -111,13 +111,13 @@ static int
 pypmc_set_n_threads( PyPMC *self, PyObject *value, void *closure )
 {
     // TODO: make a macro out of this
-    if(! PyInt_Check(value)) {
+    if(! PyLong_Check(value)) {
         PyErr_SetString(PyExc_TypeError,
                         "The n_threads attribute must be an int");
         return -1;
     }
 
-    self->conf.n_threads = PyInt_AsLong(value);
+    self->conf.n_threads = PyLong_AsLong(value);
 
     return 0;
 }
@@ -126,13 +126,13 @@ static int
 pypmc_set_n_iterations( PyPMC *self, PyObject *value, void *closure )
 {
     // TODO: make a macro out of this
-    if(! PyInt_Check(value)) {
+    if(! PyLong_Check(value)) {
         PyErr_SetString(PyExc_TypeError,
                         "The n_iterations attribute must be an int");
         return -1;
     }
 
-    self->conf.n_iterations = PyInt_AsLong(value);
+    self->conf.n_iterations = PyLong_AsLong(value);
 
     return 0;
 }
@@ -141,13 +141,13 @@ static int
 pypmc_set_rand_seed( PyPMC *self, PyObject *value, void *closure )
 {
     // TODO: make a macro out of this
-    if(! PyInt_Check(value)) {
+    if(! PyLong_Check(value)) {
         PyErr_SetString(PyExc_TypeError,
                         "The rand_seed attribute must be an int");
         return -1;
     }
 
-    self->conf.rand_seed = PyInt_AsLong(value);
+    self->conf.rand_seed = PyLong_AsLong(value);
 
     return 0;
 }
@@ -157,13 +157,13 @@ static int
 pypmc_set_n_photons( PyPMC *self, PyObject *value, void *closure )
 {
     // TODO: make a macro out of this
-    if(! PyInt_Check(value)) {
+    if(! PyLong_Check(value)) {
         PyErr_SetString(PyExc_TypeError,
                         "The n_photons attribute must be an int");
         return -1;
     }
 
-    self->sim.n_photons = PyInt_AsLong(value);
+    self->sim.n_photons = PyLong_AsLong(value);
 
     return 0;
 }
@@ -230,10 +230,10 @@ pypmc_set_detectors( PyPMC *self, PyObject *det_list, void *closure )
         det_pos = PyList_GetItem(entry, 0);
         det_radius = PyList_GetItem(entry, 1);
 
-        self->sim.det.info[i].x = PyInt_AsLong(PyTuple_GetItem(det_pos, 0));
-        self->sim.det.info[i].y = PyInt_AsLong(PyTuple_GetItem(det_pos, 1));
-        self->sim.det.info[i].z = PyInt_AsLong(PyTuple_GetItem(det_pos, 2));
-        self->sim.det.info[i].w = PyInt_AsLong(det_radius);
+        self->sim.det.info[i].x = PyLong_AsLong(PyTuple_GetItem(det_pos, 0));
+        self->sim.det.info[i].y = PyLong_AsLong(PyTuple_GetItem(det_pos, 1));
+        self->sim.det.info[i].z = PyLong_AsLong(PyTuple_GetItem(det_pos, 2));
+        self->sim.det.info[i].w = PyLong_AsLong(det_radius);
     }
 
     return 0;
@@ -286,15 +286,15 @@ pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
     }
 
     dim = PyTuple_GetItem(dimensions, 0);
-    self->sim.grid.dim.x = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.dim.x = PyLong_AsLong(PyTuple_GetItem(dim, 0));
     self->sim.grid.stepr.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     dim = PyTuple_GetItem(dimensions, 1);
-    self->sim.grid.dim.y = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.dim.y = PyLong_AsLong(PyTuple_GetItem(dim, 0));
     self->sim.grid.stepr.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     dim = PyTuple_GetItem(dimensions, 2);
-    self->sim.grid.dim.z = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.dim.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
     self->sim.grid.stepr.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     return 0;
@@ -314,18 +314,18 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
     }
 
     dim = PyTuple_GetItem(dimensions, 0);
-    self->sim.grid.Imin.x = PyInt_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.Imax.x = PyInt_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.Imin.x = PyLong_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.Imax.x = PyLong_AsLong(PyTuple_GetItem(dim, 1));
     self->sim.grid.nIstep.x = self->sim.grid.Imax.x - self->sim.grid.Imin.x + 1;
 
     dim = PyTuple_GetItem(dimensions, 1);
-    self->sim.grid.Imin.y = PyInt_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.Imax.y = PyInt_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.Imin.y = PyLong_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.Imax.y = PyLong_AsLong(PyTuple_GetItem(dim, 1));
     self->sim.grid.nIstep.y = self->sim.grid.Imax.y - self->sim.grid.Imin.y + 1;
 
     dim = PyTuple_GetItem(dimensions, 2);
-    self->sim.grid.Imin.z = PyInt_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.Imax.z = PyInt_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.Imin.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.Imax.z = PyLong_AsLong(PyTuple_GetItem(dim, 1));
     self->sim.grid.nIstep.z = self->sim.grid.Imax.z - self->sim.grid.Imin.z + 1;
 
     return 0;
@@ -336,26 +336,26 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
 static PyObject*
 pypmc_get_n_threads( PyPMC *self, void *closure )
 {
-    return PyInt_FromLong(self->conf.n_threads);
+    return PyLong_FromLong(self->conf.n_threads);
 }
 
 static PyObject*
 pypmc_get_n_iterations( PyPMC *self, void *closure )
 {
-    return PyInt_FromLong(self->conf.n_iterations);
+    return PyLong_FromLong(self->conf.n_iterations);
 }
 
 static PyObject*
 pypmc_get_rand_seed( PyPMC *self, void *closure )
 {
-    return PyInt_FromLong(self->conf.rand_seed);
+    return PyLong_FromLong(self->conf.rand_seed);
 }
 
 // Simulation
 static PyObject*
 pypmc_get_n_photons( PyPMC *self, void *closure )
 {
-    return PyInt_FromLong(self->sim.n_photons);
+    return PyLong_FromLong(self->sim.n_photons);
 }
 
 static PyObject*
@@ -389,7 +389,7 @@ pypmc_get_detectors( PyPMC *self, void *closure )
         det_pos = Py_BuildValue("(iii)", self->sim.det.info[i].x,
                                          self->sim.det.info[i].y,
                                          self->sim.det.info[i].z);
-        det_radius = PyInt_FromLong(self->sim.det.info[i].w);
+        det_radius = PyLong_FromLong(self->sim.det.info[i].w);
         det_entry = Py_BuildValue("[NN]", det_pos, det_radius);
 
         PyList_Append(det_list, det_entry);
@@ -505,13 +505,8 @@ static PyMethodDef pypmc_methods[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMethodDef module_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
 static PyTypeObject pypmc_Type = {
-    PyObject_HEAD_INIT(NULL)
-    0,                                          /* ob_size */
+    PyVarObject_HEAD_INIT(NULL, 0)
     "pypmc.pypmc",                              /* tp_name */
     sizeof(PyPMC),                              /* tp_basicsize */
     0,                                          /* tp_itemsize */
@@ -551,21 +546,34 @@ static PyTypeObject pypmc_Type = {
     pypmc_new,                                  /* tp_new */
 };
 
-PyMODINIT_FUNC
-initpypmc(void)
-{
-    // Verify that the python type is well-formed.
-    if (PyType_Ready(&pypmc_Type) < 0) return;
+static PyModuleDef pypmc_module = {
+    PyModuleDef_HEAD_INIT,
+    "pypmc",
+    "Python bindings for PMC.",
+    -1,
+    NULL, NULL, NULL, NULL, NULL
+};
 
-    PyObject *m = Py_InitModule3("pypmc", module_methods,
-                                 "PMC bindings for Python.");
+PyMODINIT_FUNC
+PyInit_pypmc(void)
+{
+    PyObject *m;
+
+    pypmc_Type.tp_new = PyType_GenericNew; 
+    if (PyType_Ready(&pypmc_Type) < 0)
+        return NULL;
+
+    m = PyModule_Create(&pypmc_module);
 
     // Ensure that the module was correctly initialized.
-    if (m == NULL) return;
+    if (m == NULL)
+        return NULL;
 
     // Protect the python type from being prematurely garbage collected.
     Py_INCREF(&pypmc_Type);
 
     // Load module into the interpreter.
-    PyModule_AddObject(m, "pypmc", (PyObject *) &pypmc_Type);
+    PyModule_AddObject(m, "PyPMC", (PyObject *) &pypmc_Type);
+
+    return m;
 }

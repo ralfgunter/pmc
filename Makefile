@@ -6,7 +6,7 @@ HOST_SRC = $(wildcard *.cc)
 HOST_OBJ = $(HOST_SRC:%.cc=obj/%.o)
 
 LINK_FLAGS = -lm
-NVCC_FLAGS = -Xcompiler -fPIC -I /home/ralfgunter/NVIDIA_GPU_Computing_SDK/C/common/inc
+NVCC_FLAGS = -Xcompiler -fPIC -I ~/NVIDIA_GPU_Computing_SDK/C/common/inc
 GCC_FLAGS  = -fPIC
 
 all: opt
