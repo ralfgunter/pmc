@@ -15,8 +15,8 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc != 5) {
-        printf( "usage: %s input_file.inp threads_per_block n_threads n_iterations\n", argv[0]);
+    if (argc != 4) {
+        printf( "usage: %s input_file.inp n_threads n_iterations\n", argv[0]);
         exit(1);
     }
 
@@ -27,9 +27,9 @@ int main(int argc, char *argv[])
     // Parse .inp file into the simulation structure.
     read_input(&conf, &sim, argv[1]);
 
-    int n_threads_per_block = atoi(argv[2]);
-    int n_threads = atoi(argv[3]);
-    int n_iterations = atoi(argv[4]);
+    int n_threads_per_block = 128;  // TODO: the kernel is dependant on this number anyhow.
+    int n_threads = atoi(argv[2]);
+    int n_iterations = atoi(argv[3]);
     parse_conf(&conf, n_threads_per_block, n_threads, n_iterations);
 
     printf("blocks = %d\nthreads = %d\n", conf.n_blocks, conf.n_threads);
@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
     printf("Ready to do some neat stuff!\n");
     simulate(conf, sim, gmem);
 
-    // Retrieve results to host
+    // Retrieve results to host.
     printf("Now we send this stuff back to the host!\n");
     retrieve(&sim, &gmem);
 

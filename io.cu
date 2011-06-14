@@ -219,7 +219,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 }
 
 // TODO: handle the remaining files to be written.
-void write_results(Simulation sim, const char *input_filename)
+int write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *momentum, *pathlength;
     char filename[128];
@@ -280,7 +280,7 @@ void write_results(Simulation sim, const char *input_filename)
         fwrite( sim.II, sizeof(float), sim.grid.nIxyz * sim.max_time, fluence );
     } else {
         printf( "ERROR: unable to save to %s\n", filename );
-        exit(1);
+        return -1;
     }
 
     // Close file handlers.
@@ -302,4 +302,3 @@ void parse_conf(ExecConfig *conf, int n_threads_per_block, int n_threads, int n_
     else
         srand(time(NULL));
 }
-

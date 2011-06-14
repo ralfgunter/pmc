@@ -5,9 +5,6 @@
 typedef struct {
     PyObject_HEAD
 
-    PyObject *py_parameters;
-    PyObject *py_results;
-
     ExecConfig conf;
     Simulation sim;
     GPUMemory gmem;
@@ -18,12 +15,8 @@ typedef struct {
 static void
 pypmc_dealloc( PyPMC *self )
 {
-    // Call tMCimg's own cleaning up procedure.
+    // Call PMC's own cleaning up procedure.
     free_mem(self->sim, self->gmem);
-
-    // Free memory used by the python arrays.
-    Py_XDECREF(self->py_parameters);
-    Py_XDECREF(self->py_results);
 
     // Finally, delete the pypmc object itself.
     self->ob_type->tp_free((PyObject *) self);
@@ -34,22 +27,6 @@ pypmc_new( PyTypeObject *type, PyObject *args, PyObject *kwds )
 {
     PyPMC *self = (PyPMC *) type->tp_alloc(type, 0);
 
-    if (self != NULL)
-    {
-        self->py_parameters = Py_BuildValue("[]");
-        if (self->py_parameters == NULL)
-        {
-            Py_DECREF(self);
-            return NULL;
-        }
-        self->py_results = Py_BuildValue("[]");
-        if (self->py_results == NULL)
-        {
-            Py_DECREF(self);
-            return NULL;
-        }
-    }
-
     return (PyObject *) self;
 }
 
@@ -57,11 +34,11 @@ static int
 pypmc_init( PyPMC *self, PyObject *args )
 {
     const char *input_filepath;
-    int n_threads_per_block, n_threads, n_iterations;
+    int n_threads, n_iterations;
 
     // The user may optionally pass the .inp filepath to automatically load
     // the simulation parameters from there.
-    if(! PyArg_ParseTuple(args, "siii", &input_filepath, &n_threads_per_block, &n_threads, &n_iterations))
+    if(! PyArg_ParseTuple(args, "|sii", &input_filepath, &n_threads, &n_iterations))
         return -1;
 
     if(input_filepath == NULL)
@@ -70,6 +47,7 @@ pypmc_init( PyPMC *self, PyObject *args )
     // Parse .inp file into the simulation structure.
     read_input(&self->conf, &self->sim, input_filepath);
 
+    int n_threads_per_block = 128;  // the kernel is dependant on this number anyhow.
     parse_conf(&self->conf, n_threads_per_block, n_threads, n_iterations);
 
     // Make sure the source is at an interface.
@@ -80,6 +58,7 @@ pypmc_init( PyPMC *self, PyObject *args )
 
     return 0;
 }
+
 //// end of fundamental methods
 //////////////////////////////////////////////////////////////////////////////
 
@@ -88,14 +67,8 @@ pypmc_write_to_disk( PyPMC *self, PyObject *args )
 {
     const char *output_filepath;    
 
-    if (! PyArg_ParseTuple(args, "|s", &output_filepath))
+    if (! PyArg_ParseTuple(args, "s", &output_filepath))
         return NULL;
-
-    if (output_filepath == NULL)
-    {
-        PyErr_SetString(PyExc_RuntimeError, "missing output filepath");
-        return NULL;
-    }
 
     write_results(self->sim, output_filepath);
 
@@ -108,43 +81,441 @@ pypmc_run( PyPMC *self, PyObject *args )
     // Run simulations on the GPU.
     simulate(self->conf, self->sim, self->gmem);
 
-    // TODO: this should be optional
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+pypmc_pull_results( PyPMC *self, PyObject *args )
+{
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
 
     Py_RETURN_NONE;
 }
 
+static PyObject *
+pypmc_push_parameters( PyPMC *self, PyObject *args )
+{
+    // Allocate and initialize memory to be used by the GPU.
+    init_mem(self->conf, &self->sim, &self->gmem);
+
+    Py_RETURN_NONE;
+}
+
+////////////////////////////////////////////////////////////////////
+//// Getters and setters
+
+//// Setters
+// ExecConfig
+static int
+pypmc_set_n_threads( PyPMC *self, PyObject *value, void *closure )
+{
+    // TODO: make a macro out of this
+    if(! PyInt_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "The n_threads attribute must be an int");
+        return -1;
+    }
+
+    self->conf.n_threads = PyInt_AsLong(value);
+
+    return 0;
+}
+
+static int
+pypmc_set_n_iterations( PyPMC *self, PyObject *value, void *closure )
+{
+    // TODO: make a macro out of this
+    if(! PyInt_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "The n_iterations attribute must be an int");
+        return -1;
+    }
+
+    self->conf.n_iterations = PyInt_AsLong(value);
+
+    return 0;
+}
+
+static int
+pypmc_set_rand_seed( PyPMC *self, PyObject *value, void *closure )
+{
+    // TODO: make a macro out of this
+    if(! PyInt_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "The rand_seed attribute must be an int");
+        return -1;
+    }
+
+    self->conf.rand_seed = PyInt_AsLong(value);
+
+    return 0;
+}
+
+// Simulation
+static int
+pypmc_set_n_photons( PyPMC *self, PyObject *value, void *closure )
+{
+    // TODO: make a macro out of this
+    if(! PyInt_Check(value)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "The n_photons attribute must be an int");
+        return -1;
+    }
+
+    self->sim.n_photons = PyInt_AsLong(value);
+
+    return 0;
+}
+
+static int
+pypmc_set_src_pos( PyPMC *self, PyObject *coords, void *closure )
+{
+    if (! (PyTuple_Check(coords) && PyTuple_Size(coords) == 3))
+    {
+        PyErr_SetString(PyExc_TypeError,
+                        "The attribute must be a tuple with three elements");
+        return -1;
+    }
+
+    self->sim.src.r.x = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 0));
+    self->sim.src.r.y = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 1));
+    self->sim.src.r.z = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 2));
+
+    correct_source(&self->sim);
+
+    return 0;
+}
+
+static int
+pypmc_set_src_dir( PyPMC *self, PyObject *dir_cosines, void *closure )
+{
+    if (! (PyTuple_Check(dir_cosines) && PyTuple_Size(dir_cosines) == 3))
+    {
+        PyErr_SetString(PyExc_TypeError,
+                        "The attribute must be a tuple with three elements");
+        return -1;
+    }
+
+    self->sim.src.d.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 0));
+    self->sim.src.d.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 1));
+    self->sim.src.d.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 2));
+
+    return 0;
+}
+
+static int
+pypmc_set_detectors( PyPMC *self, PyObject *det_list, void *closure )
+{
+    PyObject *entry, *det_pos, *det_radius;
+    Py_ssize_t num_detectors;
+
+    if (! PyList_Check(det_list))
+    {
+        PyErr_SetString(PyExc_TypeError, "The detectors attribute must be a list");
+        return -1;
+    }
+
+    // Each entry in the list uniquely identifies a detector.
+    num_detectors = PyList_Size(det_list);
+    self->sim.det.num = num_detectors;
+
+    // The old detector list must be freed, and a new one built in its place.
+    free(self->sim.det.info);
+    self->sim.det.info = (int4 *) malloc(num_detectors * sizeof(int4));
+
+    for (int i = 0; i < num_detectors; ++i)
+    {
+        entry = PyList_GetItem(det_list, i);
+        det_pos = PyList_GetItem(entry, 0);
+        det_radius = PyList_GetItem(entry, 1);
+
+        self->sim.det.info[i].x = PyInt_AsLong(PyTuple_GetItem(det_pos, 0));
+        self->sim.det.info[i].y = PyInt_AsLong(PyTuple_GetItem(det_pos, 1));
+        self->sim.det.info[i].z = PyInt_AsLong(PyTuple_GetItem(det_pos, 2));
+        self->sim.det.info[i].w = PyInt_AsLong(det_radius);
+    }
+
+    return 0;
+}
+
+static int
+pypmc_set_tissues( PyPMC *self, PyObject *tissue_list, void *closure )
+{
+    PyObject *entry;
+    Py_ssize_t num_tissues;
+
+    if (! PyList_Check(tissue_list))
+    {
+        PyErr_SetString(PyExc_TypeError, "The tissues attribute must be a list");
+        return -1;
+    }
+
+    // Each entry in the list uniquely identifies a tissue type.
+    num_tissues = PyList_Size(tissue_list);
+    self->sim.tiss.num = num_tissues;
+
+    // The old tissue list must be freed, and a new one built in its place.
+    free(self->sim.tiss.prop);
+    self->sim.tiss.prop = (float4 *) malloc((num_tissues + 1) * sizeof(float4));
+
+    for (int i = 1; i <= num_tissues; ++i)
+    {
+        entry  = PyList_GetItem(tissue_list,  i);
+
+        self->sim.tiss.prop[i].x = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
+        self->sim.tiss.prop[i].y = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 1));
+        self->sim.tiss.prop[i].z = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 2));
+        self->sim.tiss.prop[i].w = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 3));
+    }
+
+    return 0;
+}
+
+static int
+pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
+{
+    PyObject *dim;
+
+    // TODO: verify that every element is a tuple of two elements
+    if (! (PyTuple_Check(dimensions) && PyTuple_Size(dimensions) == 3))
+    {
+        PyErr_SetString(PyExc_TypeError,
+                        "The attribute must be a tuple with three elements");
+        return -1;
+    }
+
+    dim = PyTuple_GetItem(dimensions, 0);
+    self->sim.grid.dim.x = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.stepr.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+
+    dim = PyTuple_GetItem(dimensions, 1);
+    self->sim.grid.dim.y = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.stepr.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+
+    dim = PyTuple_GetItem(dimensions, 2);
+    self->sim.grid.dim.z = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.stepr.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+
+    return 0;
+}
+
+static int
+pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
+{
+    PyObject *dim;
+
+    // TODO: verify that every element is a tuple of two elements
+    if (! (PyTuple_Check(dimensions) && PyTuple_Size(dimensions) == 3))
+    {
+        PyErr_SetString(PyExc_TypeError,
+                        "The attribute must be a tuple with three elements");
+        return -1;
+    }
+
+    dim = PyTuple_GetItem(dimensions, 0);
+    self->sim.grid.Imin.x = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.Imax.x = PyInt_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.nIstep.x = self->sim.grid.Imax.x - self->sim.grid.Imin.x + 1;
+
+    dim = PyTuple_GetItem(dimensions, 1);
+    self->sim.grid.Imin.y = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.Imax.y = PyInt_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.nIstep.y = self->sim.grid.Imax.y - self->sim.grid.Imin.y + 1;
+
+    dim = PyTuple_GetItem(dimensions, 2);
+    self->sim.grid.Imin.z = PyInt_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.Imax.z = PyInt_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.nIstep.z = self->sim.grid.Imax.z - self->sim.grid.Imin.z + 1;
+
+    return 0;
+}
+
+//// Getters
+// ExecConfig
+static PyObject*
+pypmc_get_n_threads( PyPMC *self, void *closure )
+{
+    return PyInt_FromLong(self->conf.n_threads);
+}
+
+static PyObject*
+pypmc_get_n_iterations( PyPMC *self, void *closure )
+{
+    return PyInt_FromLong(self->conf.n_iterations);
+}
+
+static PyObject*
+pypmc_get_rand_seed( PyPMC *self, void *closure )
+{
+    return PyInt_FromLong(self->conf.rand_seed);
+}
+
+// Simulation
+static PyObject*
+pypmc_get_n_photons( PyPMC *self, void *closure )
+{
+    return PyInt_FromLong(self->sim.n_photons);
+}
+
+static PyObject*
+pypmc_get_src_pos( PyPMC *self, void *closure )
+{
+    PyObject *coords = Py_BuildValue("(fff)", self->sim.src.r.x,
+                                              self->sim.src.r.y,
+                                              self->sim.src.r.z);
+
+    return coords;
+}
+
+static PyObject*
+pypmc_get_src_dir( PyPMC *self, void *closure )
+{
+    PyObject *direction = Py_BuildValue("(fff)", self->sim.src.d.x,
+                                                 self->sim.src.d.y,
+                                                 self->sim.src.d.z);
+
+    return direction;
+}
+
+static PyObject*
+pypmc_get_detectors( PyPMC *self, void *closure )
+{
+    PyObject *det_list = Py_BuildValue("[]");
+    PyObject *det_entry, *det_pos, *det_radius;
+
+    for (int i = 0; i < self->sim.det.num; ++i)
+    {
+        det_pos = Py_BuildValue("(iii)", self->sim.det.info[i].x,
+                                         self->sim.det.info[i].y,
+                                         self->sim.det.info[i].z);
+        det_radius = PyInt_FromLong(self->sim.det.info[i].w);
+        det_entry = Py_BuildValue("[NN]", det_pos, det_radius);
+
+        PyList_Append(det_list, det_entry);
+    }
+
+    return det_list;
+}
+
+static PyObject*
+pypmc_get_tissues( PyPMC *self, void *closure )
+{
+    PyObject *entry;
+    PyObject *tissue_list = Py_BuildValue("[i]", 0);    // first element is a flag
+
+    for (int i = 1; i <= self->sim.tiss.num; ++i)
+    {
+        entry = Py_BuildValue("(ffff)", self->sim.tiss.prop[i].x,
+                                        self->sim.tiss.prop[i].y,
+                                        self->sim.tiss.prop[i].z,
+                                        self->sim.tiss.prop[i].w);
+
+        PyList_Append(tissue_list, entry);
+    }
+
+    return tissue_list;
+}
+
+static PyObject*
+pypmc_get_grid_dimensions( PyPMC *self, void *closure )
+{
+    PyObject *dim_x, *dim_y, *dim_z;
+    PyObject *dimensions;
+
+    dim_x = Py_BuildValue("(fi)", self->sim.grid.stepr.x, self->sim.grid.dim.x);
+    dim_y = Py_BuildValue("(fi)", self->sim.grid.stepr.y, self->sim.grid.dim.y);
+    dim_z = Py_BuildValue("(fi)", self->sim.grid.stepr.z, self->sim.grid.dim.z);
+
+    dimensions = Py_BuildValue("(NNN)", dim_x, dim_y, dim_z);
+
+    return dimensions;
+}
+
+static PyObject*
+pypmc_get_fluence_box( PyPMC *self, void *closure )
+{
+    PyObject *dim_x, *dim_y, *dim_z;
+    PyObject *dimensions;
+
+    dim_x = Py_BuildValue("(ii)", self->sim.grid.Imin.x, self->sim.grid.Imax.x);
+    dim_y = Py_BuildValue("(ii)", self->sim.grid.Imin.y, self->sim.grid.Imax.y);
+    dim_z = Py_BuildValue("(ii)", self->sim.grid.Imin.z, self->sim.grid.Imax.z);
+
+    dimensions = Py_BuildValue("(NNN)", dim_x, dim_y, dim_z);
+
+    return dimensions;
+}
+
+//// end of getters and setters
+////////////////////////////////////////////////////////////////////
+
 ////////////////////////////////////////////////////////////////////
 //// Miscellaneous/Extension-related
-static PyMemberDef pypmc_members[] = {
-    {"parameters", T_OBJECT_EX, offsetof(PyPMC, py_parameters), 0,
-    "list of simulation parameters"},
-    {"results", T_OBJECT_EX, offsetof(PyPMC, py_results), 0,
-    "list of results"},
+static PyGetSetDef pypmc_getsetters[] = {
+    // Execution parameters (ExecConfig) 
+    {"n_threads",
+     (getter) pypmc_get_n_threads, (setter) pypmc_set_n_threads, 
+     "number of CUDA threads used in the simulation", NULL},
+    {"n_iterations",
+     (getter) pypmc_get_n_iterations, (setter) pypmc_set_n_iterations, 
+     "number of CUDA iterations used in the simulation", NULL},
+    {"rand_seed",
+     (getter) pypmc_get_rand_seed, (setter) pypmc_set_rand_seed, 
+     "number of CUDA iterations used in the simulation", NULL},
 
-    {NULL, NULL, 0, NULL} /* Sentinel */
+    // Simulation parameters (Simulation)
+    {"n_photons",
+     (getter) pypmc_get_n_photons, (setter) pypmc_set_n_photons, 
+     "number of photons simulated", NULL},
+    {"src_pos",
+     (getter) pypmc_get_src_pos, (setter) pypmc_set_src_pos, 
+     "euclidean position of the source (automatically corrected to be at an interface)", NULL},
+    {"src_dir",
+     (getter) pypmc_get_src_dir, (setter) pypmc_set_src_dir, 
+     "direction cosines of the source", NULL},
+    {"detectors",
+     (getter) pypmc_get_detectors, (setter) pypmc_set_detectors, 
+     "list of detectors (their position and radius)", NULL},
+    {"tissues",
+     (getter) pypmc_get_tissues, (setter) pypmc_set_tissues, 
+     "list of tissues (their optical properties)", NULL},
+    {"grid_dimensions",
+     (getter) pypmc_get_grid_dimensions, (setter) pypmc_set_grid_dimensions, 
+     "the grid's dimensions (voxel size and number of voxels in each direction)", NULL},
+    {"fluence_box",
+     (getter) pypmc_get_fluence_box, (setter) pypmc_set_fluence_box, 
+     "the fluence box's vertices (in each direction)", NULL},
+    {NULL} /* Sentinel */
+};
+
+static PyMemberDef pypmc_members[] = {
+    {NULL} /* Sentinel */
 };
 
 static PyMethodDef pypmc_methods[] = {
     {"run_simulation", (PyCFunction) pypmc_run, METH_NOARGS,
      "Does what it says on the tin."},
+    {"pull_results", (PyCFunction) pypmc_pull_results, METH_NOARGS,
+     "Transfers the simulation results to the host memory."},
+    {"push_parameters", (PyCFunction) pypmc_push_parameters, METH_NOARGS,
+     "Transfers the simulation parameters to the gpu memory."},
     {"write_to_disk", (PyCFunction) pypmc_write_to_disk, METH_VARARGS,
-     "Save simulation results to disk, the old-fashioned way."},
-    {NULL, NULL, 0, NULL}  /* Sentinel */
+     "Saves the simulation results to disk, the old-fashioned way."},
+    {NULL}  /* Sentinel */
 };
 
 static PyMethodDef module_methods[] = {
-    {NULL, NULL, 0, NULL}  /* Sentinel */
+    {NULL}  /* Sentinel */
 };
 
 static PyTypeObject pypmc_Type = {
     PyObject_HEAD_INIT(NULL)
     0,                                          /* ob_size */
-    "pypmc.pypmc",                       /* tp_name */
-    sizeof(PyPMC),                       /* tp_basicsize */
+    "pypmc.pypmc",                              /* tp_name */
+    sizeof(PyPMC),                              /* tp_basicsize */
     0,                                          /* tp_itemsize */
-    (destructor) pypmc_dealloc,            /* tp_dealloc */
+    (destructor) pypmc_dealloc,                 /* tp_dealloc */
     0,                                          /* tp_print */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
@@ -160,24 +531,24 @@ static PyTypeObject pypmc_Type = {
     0,                                          /* tp_setattro */
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
-    "pypmc objects",                       /* tp_doc */
+    "pypmc objects",                            /* tp_doc */
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     0,                                          /* tp_iter */
     0,                                          /* tp_iternext */
-    pypmc_methods,                         /* tp_methods */
-    pypmc_members,                         /* tp_members */
-    0,                                          /* tp_getset */
+    pypmc_methods,                              /* tp_methods */
+    pypmc_members,                              /* tp_members */
+    pypmc_getsetters,                           /* tp_getset */
     0,                                          /* tp_base */
     0,                                          /* tp_dict */
     0,                                          /* tp_descr_get */
     0,                                          /* tp_descr_set */
     0,                                          /* tp_dictoffset */
-    (initproc) pypmc_init,                 /* tp_init */
+    (initproc) pypmc_init,                      /* tp_init */
     0,                                          /* tp_alloc */
-    pypmc_new,                             /* tp_new */
+    pypmc_new,                                  /* tp_new */
 };
 
 PyMODINIT_FUNC
