@@ -5,10 +5,14 @@
 typedef struct {
     PyObject_HEAD
 
+    PyObject *py_pathlength, *py_momentum_transfer;
+
     ExecConfig conf;
     Simulation sim;
     GPUMemory gmem;
 } PyPMC;
+
+static PyObject* pypmc_get_tissueArray( Simulation sim, float *tissueArray );
 
 ////////////////////////////////////////////////////////////////////
 //// Fundamental methods
@@ -17,6 +21,9 @@ pypmc_dealloc( PyPMC *self )
 {
     // Call PMC's own cleaning up procedure.
     free_mem(self->sim, self->gmem);
+
+    Py_XDECREF(self->py_pathlength);
+    Py_XDECREF(self->py_momentum_transfer);
 
     // Finally, delete the pypmc object itself.
     Py_TYPE(self)->tp_free((PyObject*) self);
@@ -89,6 +96,9 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
 
+    self->py_pathlength = pypmc_get_tissueArray(self->sim, self->sim.lenTiss);
+    self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.momTiss);
+
     Py_RETURN_NONE;
 }
 
@@ -96,7 +106,11 @@ static PyObject *
 pypmc_push_parameters( PyPMC *self, PyObject *args )
 {
     // Allocate and initialize memory to be used by the GPU.
+    free_gpu_mem(self->gmem);
+    printf("free_gpu_mem\n");
+
     init_mem(self->conf, &self->sim, &self->gmem);
+    printf("init_mem\n");
 
     Py_RETURN_NONE;
 }
@@ -446,6 +460,36 @@ pypmc_get_fluence_box( PyPMC *self, void *closure )
     return dimensions;
 }
 
+static PyObject*
+pypmc_get_tissueArray( Simulation sim, float *tissueArray )
+{
+    uint photonIndex, k;
+    int detIndex, tissueIndex;
+    PyObject *py_tissueArray = Py_BuildValue("[]");
+
+    if( sim.det.num != 0 )
+    {
+        for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
+        {
+            // Loop through number of detectors
+            for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
+            {
+                if( bitset_get(sim.detHit, photonIndex, detIndex) == 1 )
+                {
+                    for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
+                    {
+                        k = MAD_HASH((photonIndex << 5) | tissueIndex);
+
+                        PyList_Append(py_tissueArray, PyFloat_FromDouble(tissueArray[k]));
+                    }
+                }
+            }
+        }
+    }
+
+    return py_tissueArray;
+}
+
 //// end of getters and setters
 ////////////////////////////////////////////////////////////////////
 
@@ -485,10 +529,17 @@ static PyGetSetDef pypmc_getsetters[] = {
     {"fluence_box",
      (getter) pypmc_get_fluence_box, (setter) pypmc_set_fluence_box, 
      "the fluence box's vertices (in each direction)", NULL},
+
     {NULL} /* Sentinel */
 };
 
 static PyMemberDef pypmc_members[] = {
+    // Simulation results
+    {"pathlength", T_OBJECT_EX, offsetof(PyPMC, py_pathlength), READONLY,
+     "the distance travelled by each photon in each type of tissue"},
+    {"momentum_transfer", T_OBJECT_EX, offsetof(PyPMC, py_momentum_transfer), READONLY,
+     "momentum transfer"},
+
     {NULL} /* Sentinel */
 };
 
@@ -501,6 +552,7 @@ static PyMethodDef pypmc_methods[] = {
      "Transfers the simulation parameters to the gpu memory."},
     {"write_to_disk", (PyCFunction) pypmc_write_to_disk, METH_VARARGS,
      "Saves the simulation results to disk, the old-fashioned way."},
+
     {NULL}  /* Sentinel */
 };
 

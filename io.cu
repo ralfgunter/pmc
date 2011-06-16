@@ -246,7 +246,7 @@ int write_results(Simulation sim, const char *input_filename)
                     for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
                     {
                         k = MAD_HASH((photonIndex << 5) | tissueIndex);
-                        printf("k = %d\n", k);
+
                         fwrite(&sim.lenTiss[k], sizeof(float), 1, history);
                         fprintf(pathlength, "%f\n", sim.lenTiss[k]);
                         fprintf(momentum,   "%f\n", sim.momTiss[k]);       

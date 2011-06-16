@@ -142,6 +142,8 @@ extern int read_input(ExecConfig *conf, Simulation *sim, const char *input_filen
 extern int write_results(Simulation sim, const char *input_filename);
 extern void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
 extern void free_mem(Simulation sim, GPUMemory gmem); 
+extern void free_cpu_mem(Simulation sim); 
+extern void free_gpu_mem(GPUMemory gmem); 
 extern void retrieve(Simulation *sim, GPUMemory *gmem);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);

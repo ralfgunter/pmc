@@ -127,7 +127,32 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     free(h_linear_tissueType);
 }
 
-void free_mem(Simulation sim, GPUMemory gmem)
+void free_gpu_mem(GPUMemory gmem)
+{
+    // Tissue types.
+    cudaFree(gmem.tissueType);
+
+    // Detectors' locations and radii.
+    cudaFree(gmem.detLoc);
+
+    // Optical properties of the different tissue types.
+    cudaFree(gmem.tissueProp);
+
+    // Path length and momentum transfer.
+    cudaFree(gmem.lenTiss);
+    cudaFree(gmem.momTiss);
+
+    // Photon fluence.
+    cudaFree(gmem.II);
+
+    // Bitset of the detectors which were hit by a given photon.
+    cudaFree(gmem.detHit.matrix);  // TODO: properly handle this 
+
+    // Random number generation.
+    cudaFree(gmem.seed);
+}
+
+void free_cpu_mem(Simulation sim)
 {
     // Tissue types.
     for(int i = 0; i < sim.grid.dim.x; i++) {
@@ -137,32 +162,27 @@ void free_mem(Simulation sim, GPUMemory gmem)
         free(sim.grid.tissueType[i]);
     }
     free(sim.grid.tissueType);
-    cudaFree(gmem.tissueType);
 
     // Detectors' locations and radii.
     free(sim.det.info);
-    cudaFree(gmem.detLoc);
 
     // Optical properties of the different tissue types.
     free(sim.tiss.prop);
-    cudaFree(gmem.tissueProp);
 
     // Path length and momentum transfer.
     free(sim.lenTiss);
     free(sim.momTiss);
-    cudaFree(gmem.lenTiss);
-    cudaFree(gmem.momTiss);
 
     // Photon fluence.
     free(sim.II);
-    cudaFree(gmem.II);
-
-    // Random number generation.
-    cudaFree(gmem.seed);
 
     // Bitset of the detectors which were hit by a given photon.
     bitset_free(sim.detHit);
-    cudaFree(gmem.detHit.matrix);  // TODO: properly handle this 
+}
+
+void free_mem(Simulation sim, GPUMemory gmem)
+{
+    free_gpu_mem(gmem); free_cpu_mem(sim);
 }
 
 void retrieve(Simulation *sim, GPUMemory *gmem)
