@@ -93,7 +93,7 @@ __device__ void logistic_init(Real *t,Real *tnew,uint seed[],uint idx){
 __device__ Real rand_uniform01(Real v){
     return logistic_uniform(v);
 }
-__device__ void gpu_rng_init(Real t[RAND_BUF_LEN], Real tnew[RAND_BUF_LEN],uint *n_seed,int idx){
+__device__ void gpu_rng_init(Real t[RAND_BUF_LEN], Real tnew[RAND_BUF_LEN], uint *n_seed, uint idx){
     logistic_init(t,tnew,n_seed,idx);
 }
 // generate [0,1] random number for the next scattering length

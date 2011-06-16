@@ -47,8 +47,7 @@ pypmc_init( PyPMC *self, PyObject *args )
     // Parse .inp file into the simulation structure.
     read_input(&self->conf, &self->sim, input_filepath);
 
-    int n_threads_per_block = 128;  // the kernel is dependant on this number anyhow.
-    parse_conf(&self->conf, n_threads_per_block, n_threads, n_iterations);
+    parse_conf(&self->conf, n_threads, n_iterations);
 
     // Make sure the source is at an interface.
     correct_source(&self->sim);

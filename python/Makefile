@@ -1,5 +1,5 @@
-NVCC_FLAGS = -g -DNDEBUG -Xcompiler -pthread -Xcompiler -fno-strict-aliasing -Xcompiler -fwrapv -Xcompiler -O2 -Xcompiler -Wall -Xcompiler -fPIC -I.. -I/usr/local/include/python3.2m
-LINK_FLAGS = -shared -Xlinker -export-dynamic -L/usr/local/cuda/lib64 -lcudart -lm -lpthread -ldl -lutil -lpython3.2m
+NVCC_FLAGS = -g -DNDEBUG -Xcompiler -pthread -Xcompiler -fno-strict-aliasing -Xcompiler -fwrapv -Xcompiler -O2 -Xcompiler -Wall -Xcompiler -fPIC -I.. -I/usr/include/python3.2mu
+LINK_FLAGS = -shared -Xlinker -export-dynamic -L/usr/local/cuda/lib64 -lcudart -lm -lpthread -ldl -lutil -lpython3.2mu
 
 all: pypmc.so
 

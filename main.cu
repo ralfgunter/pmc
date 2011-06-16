@@ -27,10 +27,9 @@ int main(int argc, char *argv[])
     // Parse .inp file into the simulation structure.
     read_input(&conf, &sim, argv[1]);
 
-    int n_threads_per_block = 128;  // TODO: the kernel is dependant on this number anyhow.
     int n_threads = atoi(argv[2]);
     int n_iterations = atoi(argv[3]);
-    parse_conf(&conf, n_threads_per_block, n_threads, n_iterations);
+    parse_conf(&conf, n_threads, n_iterations);
 
     printf("blocks = %d\nthreads = %d\n", conf.n_blocks, conf.n_threads);
     printf("photons = %d\n", sim.n_photons);

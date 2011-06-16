@@ -34,7 +34,7 @@ __constant__ Simulation s;
 __constant__ GPUMemory g;
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int photonIndex, float3 *d)
+__device__ void henyey_greenstein(float *t, float gg, uchar tissueIndex, uint photonIndex, float3 *d)
 {
     float3 d0;
     float rand;
@@ -61,10 +61,8 @@ __device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int phot
         sincosf(theta, &stheta, &ctheta);
     }
 
-    /*
     if(theta > 0)
-        g.momTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += 1 - ctheta;
-    */
+        g.momTiss[MAD_HASH((photonIndex << 5) | tissueIndex)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -80,7 +78,7 @@ __device__ void henyey_greenstein(float *t, float gg, char tissueIndex, int phot
     }
 }
 
-__global__ void run_simulation(int photons_per_thread, int iteration)
+__global__ void run_simulation(uint *seed, int photons_per_thread, int iteration)
 {
     __shared__ int4 detLoc[MAX_DETECTORS + MAX_TISSUES];
     float4 *tissueProp = (float4 *) detLoc + MAX_DETECTORS;
@@ -88,31 +86,27 @@ __global__ void run_simulation(int photons_per_thread, int iteration)
     // Loop index
     int i;
 
-    int threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
+    uint threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
-    char tissueIndex;   // tissue type of the current voxel
-    int time;           // time elapsed since the photon was launched
+    uchar tissueIndex;   // tissue type of the current voxel
+    int time;            // time elapsed since the photon was launched
     float step;
     float musr;
 
     // Random number generation
     float t[RAND_BUF_LEN], tnew[RAND_BUF_LEN];
 
-    //if(threadIdx.x < MAX_TISSUES)
-    //{
-        //detLoc[threadIdx.x] = g.detLoc[threadIdx.x];
-        tissueProp[2*threadIdx.x] = g.tissueProp[2*threadIdx.x];
-        tissueProp[2*threadIdx.x + 1] = g.tissueProp[2*threadIdx.x + 1];
-    //}
+    detLoc[threadIdx.x] = g.detLoc[threadIdx.x];
+    tissueProp[2*threadIdx.x] = g.tissueProp[2*threadIdx.x];
+    tissueProp[2*threadIdx.x + 1] = g.tissueProp[2*threadIdx.x + 1];
     __syncthreads();
 
-    // Initialize the RNG
-    gpu_rng_init(t, tnew, g.seed, threadIndex);
+    gpu_rng_init(t, tnew, seed, threadIndex);
 
     int photons_run = 0;
     while(photons_run < photons_per_thread)
     {
-        int photonIndex = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
+        uint photonIndex = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
         photons_run++;
 
         // Set the photon weight to 1 and initialize photon length parameters
@@ -181,7 +175,10 @@ __global__ void run_simulation(int photons_per_thread, int iteration)
                 dist += step;
 
                 P2pt *= expf(-(tissueProp[tissueIndex].y) * step);
-                //g.lenTiss[LIN2D(photonIndex, tissueIndex, s.n_photons)] += step;
+                // FIXME: on 32-bits cards, this only works with up to
+                //        (2^5 - 1) tissue types (indexed from 1) and
+                //        2^27 photons (indexed from 0).
+                g.lenTiss[MAD_HASH((photonIndex << 5) | tissueIndex)] += step;
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon
@@ -208,7 +205,6 @@ __global__ void run_simulation(int photons_per_thread, int iteration)
                     time < s.max_time )
                     g.II[LIN(p.x, p.y, p.z, time, s.grid)] -= P2pt;
 
-                /*
                 // Loop through number of detectors
                 // Did the photon hit a detector?
                 for( i = 0; i < s.det.num; i++ )
@@ -216,7 +212,6 @@ __global__ void run_simulation(int photons_per_thread, int iteration)
                         absf(p.y - detLoc[i].y) <= detLoc[i].w &&
                         absf(p.z - detLoc[i].z) <= detLoc[i].w )
                         gpu_set(g.detHit, photonIndex, i);
-                */
             }
         }
     }
@@ -225,7 +220,7 @@ __global__ void run_simulation(int photons_per_thread, int iteration)
 // Make sure the source is at an interface.
 void correct_source(Simulation *sim)
 {
-    char tissueIndex;
+    uchar tissueIndex;
     int3 p;
     float3 r0;
 
@@ -264,8 +259,8 @@ void correct_source(Simulation *sim)
 
 void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
 {
-    // FIXME: as things stand, the kernel will most likely simulate too
-    //        many photons; do something about it.
+    uint seed;
+    uint *temp_seed, *d_seed;
     int photons_per_iteration = sim.n_photons / conf.n_iterations;
     int photons_per_thread = photons_per_iteration / conf.n_threads;
     int iteration = 0;
@@ -273,11 +268,19 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     printf("photons per thread = %d\n", photons_per_thread);
     printf("photons per iteration = %d\n", photons_per_iteration);
 
+    seed = conf.rand_seed;
+    d_seed = gmem.seed;
     for(iteration = 0; iteration < conf.n_iterations; iteration++)
     {
-        run_simulation<<< conf.n_blocks, conf.n_threads_per_block >>>(photons_per_thread, iteration);
+        run_simulation<<< conf.n_blocks, 128 >>>(d_seed, photons_per_thread, iteration);
+
+        // Order a new batch of RNG seeds while the current iteration is being simulated.
+        temp_seed = init_rand_seed(seed++, conf);
 
         // Make sure all photons have already been simulated before moving on.
         cudaThreadSynchronize();
+
+        cudaFree(d_seed);
+        d_seed = temp_seed;
     }
 }

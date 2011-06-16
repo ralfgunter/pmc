@@ -24,15 +24,20 @@
 #include <string.h>
 #include <time.h>
 
-//#include "cutil_inline.h"
-//#include "cutil_math.h"
-
 #include "bitset2d.h"
 
 #define PI 3.1415926535897932
 #define C_VACUUM 2.9979e11
 #define FP_DIV_ERR 1e-8
 #define EPS 2.2204e-16
+
+// TODO: find a better place for this?
+#define RAND_BUF_LEN  5     // Register arrays
+#define RAND_SEED_LEN 5     // 32bit seed length (32*5 = 160bits)
+
+#define MAX_DETECTORS 256
+#define MAX_TISSUES 128
+
 #define MIN(a,b) ((a) < (b) ? (a) :  (b))
 #define absf(x)  ((x) >  0  ? (x) : -(x))
 
@@ -44,15 +49,14 @@
 
 #define DIST2VOX(x, sr) ((int) ((x) * (sr)))
 
+// Magic number is "any odd number with a decent mix of 0s and 1s in every byte"
+// - SPWorley at http://forums.nvidia.com/index.php?showtopic=189165
+// multiply-add code from wikipedia
+#define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - 24))
+
+
 typedef unsigned int uint;
 typedef unsigned char uchar;
-
-// TODO: find a better place for this?
-#define RAND_BUF_LEN  5     // Register arrays
-#define RAND_SEED_LEN 5     // 32bit seed length (32*5 = 160bits)
-
-#define MAX_DETECTORS 256
-#define MAX_TISSUES 128
 
 typedef struct {
     uchar ***tissueType; // type of the tissue within the voxel
@@ -85,7 +89,7 @@ typedef struct {
 } Tissue;
 
 typedef struct {
-    int n_photons;
+    uint n_photons;
 
     float min_length, max_length;
     float stepT, stepLr;
@@ -126,7 +130,7 @@ typedef struct {
 } GPUMemory;
 
 typedef struct {
-    int n_blocks, n_threads, n_threads_per_block;
+    int n_blocks, n_threads;
     int n_iterations;
     int rand_seed;
 } ExecConfig;
@@ -141,6 +145,7 @@ extern void free_mem(Simulation sim, GPUMemory gmem);
 extern void retrieve(Simulation *sim, GPUMemory *gmem);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
-extern void parse_conf(ExecConfig *conf, int n_threads_per_block, int n_threads, int n_iterations);
+extern void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
+extern uint* init_rand_seed(uint seed, ExecConfig conf);
 
 #endif // _MAIN_H_

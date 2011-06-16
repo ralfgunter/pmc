@@ -20,7 +20,7 @@
 int read_segmentation_file(Simulation *sim, const char *filename)
 {
     FILE *fp;
-    int i,j,k;
+    int i, j, k;
     uchar ***tissueType;
 
     printf( "Loading target medium volume from %s\n", filename );
@@ -223,17 +223,15 @@ int write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *momentum, *pathlength;
     char filename[128];
-    //int i, j, k, photonIndex;
+    int tissueIndex, detIndex;
+    uint k, photonIndex;
 
     // TODO: check for errors
-    //sprintf( filename, "%s.his", input_filename );
-    //history = fopen( filename, "wb" );
-    //sprintf( filename, "%s_momentum_transfer", input_filename );
-    //momentum = fopen( "momentum_transfer", "wb" );
-    //sprintf( filename, "%s_pathlength", input_filename );
-    //pathlength = fopen( "pathlength", "wb" );
+    sprintf( filename, "%s.his", input_filename );
+    history    = fopen( filename, "wb" );
+    momentum   = fopen( "momentum_transfer", "w" );
+    pathlength = fopen( "pathlength", "w" );
 
-/*
     if( sim.det.num != 0 )
     {
         for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
@@ -245,9 +243,10 @@ int write_results(Simulation sim, const char *input_filename)
                 {
                     // Write to the history file
                     fwrite(&detIndex, sizeof(int), 1, history);
-                    for( j = 1; j <= sim.tiss.num; j++ )
+                    for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
                     {
-                        k = LIN2D(photonIndex, j, sim.n_photons);
+                        k = MAD_HASH((photonIndex << 5) | tissueIndex);
+                        printf("k = %d\n", k);
                         fwrite(&sim.lenTiss[k], sizeof(float), 1, history);
                         fprintf(pathlength, "%f\n", sim.lenTiss[k]);
                         fprintf(momentum,   "%f\n", sim.momTiss[k]);       
@@ -256,7 +255,6 @@ int write_results(Simulation sim, const char *input_filename)
             }
         }
     }
-*/
 
 /*    
     // If there are no detectors, then save exit position.
@@ -284,17 +282,18 @@ int write_results(Simulation sim, const char *input_filename)
     }
 
     // Close file handlers.
-    //fclose(history);
+    fclose(history);
     fclose(fluence);
-    //fclose(momentum);
-    //fclose(pathlength);
+    fclose(momentum);
+    fclose(pathlength);
+
+    return 0;
 }
 
-void parse_conf(ExecConfig *conf, int n_threads_per_block, int n_threads, int n_iterations)
+void parse_conf(ExecConfig *conf, int n_threads, int n_iterations)
 {
-    conf->n_threads_per_block = n_threads_per_block;
     conf->n_threads = n_threads;
-    conf->n_blocks = conf->n_threads / conf->n_threads_per_block;
+    conf->n_blocks = conf->n_threads / 128;
     conf->n_iterations = n_iterations;
 
     if(conf->rand_seed > 0)
