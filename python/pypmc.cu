@@ -6,6 +6,7 @@ typedef struct {
     PyObject_HEAD
 
     PyObject *py_pathlength, *py_momentum_transfer;
+    PyObject *py_medium;
 
     ExecConfig conf;
     Simulation sim;
@@ -52,7 +53,10 @@ pypmc_init( PyPMC *self, PyObject *args )
         return 0;
 
     // Parse .inp file into the simulation structure.
-    read_input(&self->conf, &self->sim, input_filepath);
+    if (read_input(&self->conf, &self->sim, input_filepath) != 0)
+    {
+        return -1;
+    }
 
     parse_conf(&self->conf, n_threads, n_iterations);
 
@@ -106,11 +110,38 @@ static PyObject *
 pypmc_push_parameters( PyPMC *self, PyObject *args )
 {
     // Allocate and initialize memory to be used by the GPU.
-    free_gpu_mem(self->gmem);
     printf("free_gpu_mem\n");
-
-    init_mem(self->conf, &self->sim, &self->gmem);
+    free_gpu_mem(self->gmem);
     printf("init_mem\n");
+    init_mem(self->conf, &self->sim, &self->gmem);
+    printf("done!\n");
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+pypmc_load_medium( PyPMC *self, PyObject *args )
+{
+    const char *medium_filepath;
+    int dim_x, dim_y, dim_z;
+
+    if (! PyArg_ParseTuple(args, "siii", &medium_filepath, &dim_x, &dim_y, &dim_z))
+        return NULL;
+
+    read_segmentation_file(&self->sim, medium_filepath);
+    self->sim.grid.dim.x = dim_x;
+    self->sim.grid.dim.y = dim_y;
+    self->sim.grid.dim.z = dim_z;
+
+    // TODO: better handle this
+    self->sim.grid.Imax.x = dim_x;
+    self->sim.grid.Imax.y = dim_y;
+    self->sim.grid.Imax.z = dim_z;
+    self->sim.grid.nIstep.x = dim_x;
+    self->sim.grid.nIstep.y = dim_y;
+    self->sim.grid.nIstep.z = dim_z;
+    self->sim.grid.nIxy  = dim_x * dim_y;
+    self->sim.grid.nIxyz = dim_x * dim_y * dim_z;
 
     Py_RETURN_NONE;
 }
@@ -272,14 +303,14 @@ pypmc_set_tissues( PyPMC *self, PyObject *tissue_list, void *closure )
     free(self->sim.tiss.prop);
     self->sim.tiss.prop = (float4 *) malloc((num_tissues + 1) * sizeof(float4));
 
-    for (int i = 1; i <= num_tissues; ++i)
+    for (int i = 0; i < num_tissues; ++i)
     {
-        entry  = PyList_GetItem(tissue_list,  i);
+        entry = PyList_GetItem(tissue_list, i);
 
-        self->sim.tiss.prop[i].x = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
-        self->sim.tiss.prop[i].y = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 1));
-        self->sim.tiss.prop[i].z = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 2));
-        self->sim.tiss.prop[i].w = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 3));
+        self->sim.tiss.prop[i + 1].x = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
+        self->sim.tiss.prop[i + 1].y = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 1));
+        self->sim.tiss.prop[i + 1].z = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 2));
+        self->sim.tiss.prop[i + 1].w = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 3));
     }
 
     return 0;
@@ -415,7 +446,7 @@ static PyObject*
 pypmc_get_tissues( PyPMC *self, void *closure )
 {
     PyObject *entry;
-    PyObject *tissue_list = Py_BuildValue("[i]", 0);    // first element is a flag
+    PyObject *tissue_list = Py_BuildValue("[]");
 
     for (int i = 1; i <= self->sim.tiss.num; ++i)
     {
@@ -471,7 +502,6 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
     {
         for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
         {
-            // Loop through number of detectors
             for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
             {
                 if( bitset_get(sim.detHit, photonIndex, detIndex) == 1 )
@@ -552,6 +582,8 @@ static PyMethodDef pypmc_methods[] = {
      "Transfers the simulation parameters to the gpu memory."},
     {"write_to_disk", (PyCFunction) pypmc_write_to_disk, METH_VARARGS,
      "Saves the simulation results to disk, the old-fashioned way."},
+    {"load_medium", (PyCFunction) pypmc_load_medium, METH_VARARGS,
+     "Load tridimensional medium"},
 
     {NULL}  /* Sentinel */
 };

@@ -179,7 +179,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     src_dir.y /= foo;
     src_dir.z /= foo;
 
-    // Calculate the min and max photon length from the min and max propagation times.
+    // Calculate the min/max photon trajectory length from the min/max propagation time.
     max_length = maxT * C_VACUUM / tissProp[1].w;
     min_length = minT * C_VACUUM / tissProp[1].w;
     stepL     = stepT * C_VACUUM / tissProp[1].w;

@@ -59,26 +59,33 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Calculate the total number of voxel elements.
     int grid_dim = sim->grid.dim.x * sim->grid.dim.y * sim->grid.dim.z;
+    printf("grid_dim\n");
 
     // Linearize tissueType, as CUDA cannot handle pointers to pointers.
     h_linear_tissueType = (uchar *) malloc(grid_dim * sizeof(uchar));
+    printf("(%d, %d, %d)\n", sim->grid.dim.x, sim->grid.dim.y, sim->grid.dim.z);
     linearize_3d(sim->grid.tissueType, h_linear_tissueType,
                  sim->grid.dim.x, sim->grid.dim.y, sim->grid.dim.z);
+    printf("linear tissue type\n");
 
     // Setup the path length and momentum transfer arrays.
     //num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
     num_tissueArrays = 1 << 25; // 128 MBs used by each array; must be a power of 2
     sim->lenTiss = (float *) calloc(num_tissueArrays, sizeof(float));
     sim->momTiss = (float *) calloc(num_tissueArrays, sizeof(float));
+    printf("tissueArrays\n");
 
     // Photon fluence.
     num_II = sim->grid.nIxyz * sim->max_time;
     sim->II = (float *) calloc(num_II, sizeof(float));
+    printf("fluence\n");
 
     // Bitset indicating which detectors (if any) were hit by which photons.
     sim->detHit = bitset_new(sim->n_photons, sim->det.num);
+    printf("detHit\n");
 
     d_seed = init_rand_seed(conf.rand_seed, conf);
+    printf("rand seed\n");
 
     // Allocate memory on the GPU global memory.
     // TODO: use constant memory where appropriate 
@@ -89,6 +96,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     cudaMalloc((void **) &d_momTiss, num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_II,      num_II           * sizeof(float));
     cudaMalloc((void **) &d_detHit_matrix, bitset_size(sim->detHit) * sizeof(uint));
+    printf("cudaMalloc\n");
 
     int gpu_mem_spent = sizeof(int4)   * sim->det.num
                       + sizeof(float4) * (sim->tiss.num + 1)
@@ -97,7 +105,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                       + sizeof(float)  * num_tissueArrays
                       + sizeof(float)  * num_II
                       + sizeof(uint)   * bitset_size(sim->detHit);
-    printf("memory spent = %d\n", gpu_mem_spent / (1024 * 1024));
+    printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
 
     // Copy simulation memory to the GPU.
     //cudaMemcpyToSymbol("detLoc", sim->det.info, sim->det.num * sizeof(int4));

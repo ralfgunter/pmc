@@ -140,6 +140,7 @@ typedef struct {
 //       it's not necessary? Investigate.
 extern int read_input(ExecConfig *conf, Simulation *sim, const char *input_filename);
 extern int write_results(Simulation sim, const char *input_filename);
+extern int read_segmentation_file(Simulation *sim, const char *filename);
 extern void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
 extern void free_mem(Simulation sim, GPUMemory gmem); 
 extern void free_cpu_mem(Simulation sim); 
