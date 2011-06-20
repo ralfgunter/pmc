@@ -242,7 +242,10 @@ void correct_source(Simulation *sim)
         MOVE(p, r0, sim->grid.stepr);
         tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
     }
-    while( tissueIndex == 0 )
+    while( tissueIndex == 0 &&
+           p.x > 0 && p.x < sim->grid.dim.x &&
+           p.y > 0 && p.y < sim->grid.dim.y &&
+           p.z > 0 && p.z < sim->grid.dim.z )
     {
         r0.x += sim->src.d.x * sim->grid.minstepsize;
         r0.y += sim->src.d.y * sim->grid.minstepsize;

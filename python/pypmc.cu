@@ -53,10 +53,7 @@ pypmc_init( PyPMC *self, PyObject *args )
         return 0;
 
     // Parse .inp file into the simulation structure.
-    if (read_input(&self->conf, &self->sim, input_filepath) != 0)
-    {
-        return -1;
-    }
+    read_input(&self->conf, &self->sim, input_filepath);
 
     parse_conf(&self->conf, n_threads, n_iterations);
 
@@ -110,11 +107,8 @@ static PyObject *
 pypmc_push_parameters( PyPMC *self, PyObject *args )
 {
     // Allocate and initialize memory to be used by the GPU.
-    printf("free_gpu_mem\n");
     free_gpu_mem(self->gmem);
-    printf("init_mem\n");
     init_mem(self->conf, &self->sim, &self->gmem);
-    printf("done!\n");
 
     Py_RETURN_NONE;
 }
@@ -128,15 +122,16 @@ pypmc_load_medium( PyPMC *self, PyObject *args )
     if (! PyArg_ParseTuple(args, "siii", &medium_filepath, &dim_x, &dim_y, &dim_z))
         return NULL;
 
-    read_segmentation_file(&self->sim, medium_filepath);
     self->sim.grid.dim.x = dim_x;
     self->sim.grid.dim.y = dim_y;
     self->sim.grid.dim.z = dim_z;
 
+    read_segmentation_file(&self->sim, medium_filepath);
+
     // TODO: better handle this
-    self->sim.grid.Imax.x = dim_x;
-    self->sim.grid.Imax.y = dim_y;
-    self->sim.grid.Imax.z = dim_z;
+    self->sim.grid.Imax.x = dim_x - 1;
+    self->sim.grid.Imax.y = dim_y - 1;
+    self->sim.grid.Imax.z = dim_z - 1;
     self->sim.grid.nIstep.x = dim_x;
     self->sim.grid.nIstep.y = dim_y;
     self->sim.grid.nIstep.z = dim_z;
