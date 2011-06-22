@@ -67,7 +67,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Setup the path length and momentum transfer arrays.
     //num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
-    num_tissueArrays = 1 << 25; // 128 MBs used by each array; must be a power of 2
+    num_tissueArrays = 1 << NUM_HASH_BITS; // 128 MBs used by each array; must be a power of 2
     sim->lenTiss = (float *) calloc(num_tissueArrays, sizeof(float));
     sim->momTiss = (float *) calloc(num_tissueArrays, sizeof(float));
 
@@ -96,7 +96,8 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                       + sizeof(float)  * num_tissueArrays
                       + sizeof(float)  * num_tissueArrays
                       + sizeof(float)  * num_II
-                      + sizeof(uint)   * bitset_size(sim->detHit);
+                      + sizeof(uint)   * bitset_size(sim->detHit)
+                      + sizeof(uint)   * conf.n_threads * RAND_SEED_LEN;
     printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
 
     // Copy simulation memory to the GPU.
@@ -188,7 +189,7 @@ void free_mem(Simulation sim, GPUMemory gmem)
 void retrieve(Simulation *sim, GPUMemory *gmem)
 {
     //size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(float);
-    size_t sizeof_tissueArrays = (1 << 25) * sizeof(float);
+    size_t sizeof_tissueArrays = (1 << NUM_HASH_BITS) * sizeof(float);
     size_t sizeof_II = sim->grid.nIxyz * sim->max_time * sizeof(float);
     size_t sizeof_detHit = bitset_size(sim->detHit) * sizeof(uint);
 

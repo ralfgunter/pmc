@@ -38,6 +38,8 @@
 #define MAX_DETECTORS 256
 #define MAX_TISSUES 128
 
+#define NUM_HASH_BITS 25
+
 #define MIN(a,b) ((a) < (b) ? (a) :  (b))
 #define absf(x)  ((x) >  0  ? (x) : -(x))
 
@@ -47,12 +49,10 @@
 #define LIN2D(x,y,max_x) ((x) + (y) * (max_x))
 #define LIN3D(x,y,z,max_x,max_y) (LIN2D((x),(y),(max_x)) + (z) * ((max_x) * (max_y)))
 
-#define DIST2VOX(x, sr) ((int) ((x) * (sr)))
-
 // Magic number is "any odd number with a decent mix of 0s and 1s in every byte"
 // - SPWorley at http://forums.nvidia.com/index.php?showtopic=189165
 // multiply-add code from wikipedia
-#define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - 24))
+#define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
 
 
 typedef unsigned int uint;

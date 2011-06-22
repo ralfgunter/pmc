@@ -229,16 +229,28 @@ pypmc_set_src_pos( PyPMC *self, PyObject *coords, void *closure )
 static int
 pypmc_set_src_dir( PyPMC *self, PyObject *dir_cosines, void *closure )
 {
+    float3 src_dir;
+
     if (! (PyTuple_Check(dir_cosines) && PyTuple_Size(dir_cosines) == 3))
     {
         PyErr_SetString(PyExc_TypeError,
-                        "The attribute must be a tuple with three elements");
+                        "The source direction must be a tuple with three elements");
         return -1;
     }
 
-    self->sim.src.d.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 0));
-    self->sim.src.d.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 1));
-    self->sim.src.d.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 2));
+    src_dir.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 0));
+    src_dir.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 1));
+    src_dir.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 2));
+
+    // Normalize the direction cosine of the source.
+    float foo = sqrt(src_dir.x*src_dir.x + src_dir.y*src_dir.y + src_dir.z*src_dir.z);
+    src_dir.x /= foo;
+    src_dir.y /= foo;
+    src_dir.z /= foo;
+
+    self->sim.src.d.x = src_dir.x;
+    self->sim.src.d.y = src_dir.y;
+    self->sim.src.d.z = src_dir.z;
 
     return 0;
 }
@@ -335,6 +347,11 @@ pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
     dim = PyTuple_GetItem(dimensions, 2);
     self->sim.grid.dim.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
     self->sim.grid.stepr.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+
+    // Get the minimum dimension.
+    self->sim.grid.minstepsize = MIN(self->sim.grid.dim.x,
+                                     MIN(self->sim.grid.dim.y,
+                                         self->sim.grid.dim.z)); 
 
     return 0;
 }
@@ -554,6 +571,17 @@ static PyGetSetDef pypmc_getsetters[] = {
     {"fluence_box",
      (getter) pypmc_get_fluence_box, (setter) pypmc_set_fluence_box, 
      "the fluence box's vertices (in each direction)", NULL},
+/*
+    {"min_time",
+     (getter) pypmc_get_min_time, (setter) pypmc_set_min_time, 
+     "minimum duration of simulation for a given photon to be accounted in the fluence calculation", NULL},
+    {"max_time",
+     (getter) pypmc_get_max_time, (setter) pypmc_set_max_time, 
+     "maximum duration of simulation for a given photon to be accounted in the fluence calculation", NULL},
+    {"time_step",
+     (getter) pypmc_get_time_step, (setter) pypmc_set_time_step, 
+     "simulation time step", NULL},
+*/
 
     {NULL} /* Sentinel */
 };
