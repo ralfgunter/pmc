@@ -9,10 +9,6 @@
 *                                                                               *
 * License:  4-clause BSD License, see LICENSE for details                       *
 *                                                                               *
-* Example:                                                                      *
-*         pmc input.inp                                                      *
-*                                                                               *
-* Please find more details in README and doc/HELP                               *
 ********************************************************************************/
 
 #include "main.h"

@@ -387,6 +387,38 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
     return 0;
 }
 
+static int
+pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
+{
+    float max_time, min_time, time_step;
+    float max_time_float, stepT_r, stepT_too_small;
+    int max_time_int;
+
+    if(! PyArg_ParseTuple(value, "fff", &min_time, &max_time, &time_step))
+        return -1;
+
+
+    // Calculate number of gates, taking into account floating point division errors.
+    max_time_float = (max_time - min_time) / time_step;
+    max_time_int   = (int) max_time_float;
+    stepT_r = absf(max_time_float - max_time_int) * time_step;
+    stepT_too_small = FP_DIV_ERR * time_step;
+    if(stepT_r < stepT_too_small)
+        max_time = max_time_int;
+    else
+        max_time = ceil(max_time_float);
+
+    // Calculate the min/max photon trajectory length from the min/max propagation time.
+    self->sim.max_length     = max_time * C_VACUUM / self->sim.tiss.prop[1].w;
+    self->sim.min_length     = min_time * C_VACUUM / self->sim.tiss.prop[1].w;
+    self->sim.stepLr = 1.0 / (time_step * C_VACUUM / self->sim.tiss.prop[1].w);
+
+    self->sim.max_time = max_time;
+    self->sim.stepT = time_step;
+
+    return 0;
+}
+
 //// Getters
 // ExecConfig
 static PyObject*
@@ -532,6 +564,13 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
     return py_tissueArray;
 }
 
+// FIXME: stub getter
+static PyObject*
+pypmc_get_time_params( PyPMC *self, void *closure )
+{
+    Py_RETURN_NONE;
+}
+
 //// end of getters and setters
 ////////////////////////////////////////////////////////////////////
 
@@ -571,17 +610,9 @@ static PyGetSetDef pypmc_getsetters[] = {
     {"fluence_box",
      (getter) pypmc_get_fluence_box, (setter) pypmc_set_fluence_box, 
      "the fluence box's vertices (in each direction)", NULL},
-/*
-    {"min_time",
-     (getter) pypmc_get_min_time, (setter) pypmc_set_min_time, 
-     "minimum duration of simulation for a given photon to be accounted in the fluence calculation", NULL},
-    {"max_time",
-     (getter) pypmc_get_max_time, (setter) pypmc_set_max_time, 
-     "maximum duration of simulation for a given photon to be accounted in the fluence calculation", NULL},
-    {"time_step",
-     (getter) pypmc_get_time_step, (setter) pypmc_set_time_step, 
-     "simulation time step", NULL},
-*/
+    {"time_params",
+     (getter) pypmc_get_time_params, (setter) pypmc_set_time_params, 
+     "(minimum time, maximum time, time step)", NULL},
 
     {NULL} /* Sentinel */
 };
