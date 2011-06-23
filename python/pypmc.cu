@@ -41,7 +41,7 @@ pypmc_new( PyTypeObject *type, PyObject *args, PyObject *kwds )
 static int
 pypmc_init( PyPMC *self, PyObject *args )
 {
-    const char *input_filepath;
+    const char *input_filepath = NULL;
     int n_threads, n_iterations;
 
     // The user may optionally pass the .inp filepath to automatically load
@@ -349,9 +349,9 @@ pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
     self->sim.grid.stepr.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     // Get the minimum dimension.
-    self->sim.grid.minstepsize = MIN(self->sim.grid.dim.x,
-                                     MIN(self->sim.grid.dim.y,
-                                         self->sim.grid.dim.z)); 
+    self->sim.grid.minstepsize = MIN(1.0 / self->sim.grid.stepr.x,
+                                     MIN(1.0 / self->sim.grid.stepr.y,
+                                         1.0 / self->sim.grid.stepr.z)); 
 
     return 0;
 }
@@ -390,12 +390,13 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
 static int
 pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
 {
-    float max_time, min_time, time_step;
-    float max_time_float, stepT_r, stepT_too_small;
+    double max_time, min_time, time_step;
+    double max_time_float, stepT_r, stepT_too_small;
     int max_time_int;
 
-    if(! PyArg_ParseTuple(value, "fff", &min_time, &max_time, &time_step))
-        return -1;
+    min_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 0));
+    max_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 1));
+    time_step = PyFloat_AsDouble(PyTuple_GetItem(value, 2));
 
 
     // Calculate number of gates, taking into account floating point division errors.
@@ -511,9 +512,9 @@ pypmc_get_grid_dimensions( PyPMC *self, void *closure )
     PyObject *dim_x, *dim_y, *dim_z;
     PyObject *dimensions;
 
-    dim_x = Py_BuildValue("(fi)", self->sim.grid.stepr.x, self->sim.grid.dim.x);
-    dim_y = Py_BuildValue("(fi)", self->sim.grid.stepr.y, self->sim.grid.dim.y);
-    dim_z = Py_BuildValue("(fi)", self->sim.grid.stepr.z, self->sim.grid.dim.z);
+    dim_x = Py_BuildValue("(if)", self->sim.grid.dim.x, self->sim.grid.stepr.x);
+    dim_y = Py_BuildValue("(if)", self->sim.grid.dim.y, self->sim.grid.stepr.y);
+    dim_z = Py_BuildValue("(if)", self->sim.grid.dim.z, self->sim.grid.stepr.z);
 
     dimensions = Py_BuildValue("(NNN)", dim_x, dim_y, dim_z);
 
