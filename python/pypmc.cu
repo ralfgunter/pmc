@@ -129,9 +129,6 @@ pypmc_load_medium( PyPMC *self, PyObject *args )
     read_segmentation_file(&self->sim, medium_filepath);
 
     // TODO: better handle this
-    self->sim.grid.Imax.x = dim_x - 1;
-    self->sim.grid.Imax.y = dim_y - 1;
-    self->sim.grid.Imax.z = dim_z - 1;
     self->sim.grid.nIstep.x = dim_x;
     self->sim.grid.nIstep.y = dim_y;
     self->sim.grid.nIstep.z = dim_z;
@@ -157,6 +154,7 @@ pypmc_set_n_threads( PyPMC *self, PyObject *value, void *closure )
     }
 
     self->conf.n_threads = PyLong_AsLong(value);
+    self->conf.n_blocks = self->conf.n_threads / 128;
 
     return 0;
 }
@@ -383,6 +381,9 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
     self->sim.grid.Imin.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
     self->sim.grid.Imax.z = PyLong_AsLong(PyTuple_GetItem(dim, 1));
     self->sim.grid.nIstep.z = self->sim.grid.Imax.z - self->sim.grid.Imin.z + 1;
+
+    self->sim.grid.nIxy  = self->sim.grid.nIstep.x * self->sim.grid.nIstep.y;
+    self->sim.grid.nIxyz = self->sim.grid.nIxy * self->sim.grid.nIstep.z;
 
     return 0;
 }
