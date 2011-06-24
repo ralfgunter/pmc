@@ -2,6 +2,16 @@
 #include "structmember.h"
 #include "main.h"
 
+#if PYTHON == 2
+#undef PyLong_Check
+#undef PyLong_AsLong 
+#undef PyLong_FromLong 
+
+#define PyLong_Check PyInt_Check
+#define PyLong_AsLong PyInt_AsLong
+#define PyLong_FromLong PyInt_FromLong
+#endif
+
 typedef struct {
     PyObject_HEAD
 
@@ -27,7 +37,11 @@ pypmc_dealloc( PyPMC *self )
     Py_XDECREF(self->py_momentum_transfer);
 
     // Finally, delete the pypmc object itself.
-    Py_TYPE(self)->tp_free((PyObject*) self);
+#if PYTHON == 3
+    Py_TYPE(self)->tp_free((PyObject *) self);
+#elif PYTHON == 2
+    self->ob_type->tp_free((PyObject *) self);
+#endif
 }
 
 static PyObject *
@@ -645,7 +659,12 @@ static PyMethodDef pypmc_methods[] = {
 };
 
 static PyTypeObject pypmc_Type = {
+#if PYTHON == 3
     PyVarObject_HEAD_INIT(NULL, 0)
+#elif PYTHON == 2
+    PyObject_HEAD_INIT(NULL)
+    0,                  
+#endif
     "pypmc.pypmc",                              /* tp_name */
     sizeof(PyPMC),                              /* tp_basicsize */
     0,                                          /* tp_itemsize */
@@ -685,6 +704,7 @@ static PyTypeObject pypmc_Type = {
     pypmc_new,                                  /* tp_new */
 };
 
+#if PYTHON == 3
 static PyModuleDef pypmc_module = {
     PyModuleDef_HEAD_INIT,
     "pypmc",
@@ -692,21 +712,27 @@ static PyModuleDef pypmc_module = {
     -1,
     NULL, NULL, NULL, NULL, NULL
 };
+#endif
+
+#if PYTHON == 2
+static PyMethodDef module_methods[] = {
+    {NULL}  /* Sentinel */
+};
+#endif
 
 PyMODINIT_FUNC
+#if PYTHON == 3
 PyInit_pypmc(void)
 {
     PyObject *m;
 
     pypmc_Type.tp_new = PyType_GenericNew; 
-    if (PyType_Ready(&pypmc_Type) < 0)
-        return NULL;
+    if (PyType_Ready(&pypmc_Type) < 0) return NULL;
 
     m = PyModule_Create(&pypmc_module);
 
     // Ensure that the module was correctly initialized.
-    if (m == NULL)
-        return NULL;
+    if (m == NULL) return NULL;
 
     // Protect the python type from being prematurely garbage collected.
     Py_INCREF(&pypmc_Type);
@@ -716,3 +742,24 @@ PyInit_pypmc(void)
 
     return m;
 }
+#elif PYTHON == 2
+initpypmc(void)
+{
+    PyObject *m;
+
+    // Verify that the python type is well-formed.
+    if (PyType_Ready(&pypmc_Type) < 0) return;
+
+    m = Py_InitModule3("pypmc", module_methods,
+                       "PMC bindings for Python.");
+
+    // Ensure that the module was correctly initialized.
+    if (m == NULL) return;
+
+    // Protect the python type from being prematurely garbage collected.
+    Py_INCREF(&pypmc_Type);
+
+    // Load module into the interpreter.
+    PyModule_AddObject(m, "PyPMC", (PyObject *) &pypmc_Type);
+}
+#endif

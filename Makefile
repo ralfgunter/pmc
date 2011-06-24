@@ -1,4 +1,4 @@
-.PHONY: python
+.PHONY: python2 python3
 
 DEV_SRC  = $(wildcard *.cu)
 DEV_OBJ  = $(DEV_SRC:%.cu=obj/%.o)
@@ -28,8 +28,11 @@ debug: pmc
 opt: NVCC_FLAGS += -use_fast_math -arch=compute_11
 opt: pmc 
 
-python: opt
-	@$(MAKE) -C python
+python2: opt
+	@$(MAKE) python2 -C python
+
+python3: opt
+	@$(MAKE) python3 -C python
 
 clean:
 	rm -rf obj/* pmc
