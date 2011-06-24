@@ -28,11 +28,13 @@ debug: pmc
 opt: NVCC_FLAGS += -use_fast_math -arch=compute_11
 opt: pmc 
 
+python3: opt
+	@$(MAKE) python3 -C python
+
 python2: opt
 	@$(MAKE) python2 -C python
 
-python3: opt
-	@$(MAKE) python3 -C python
+python: python3
 
 clean:
 	rm -rf obj/* pmc

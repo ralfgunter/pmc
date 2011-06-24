@@ -15,10 +15,6 @@
 #include "logistic_rand_kernel.h"
 #include "bitset2d_kernel.h"
 
-#define LIN(i,j,k,time,grid) (time * grid.nIxyz + \
-                              ((k) - grid.Imin.z) * grid.nIxy + \
-                              ((j) - grid.Imin.y) * grid.nIstep.x + \
-                              ((i) - grid.Imin.x))
 #define MOVE(p, r, stepr) \
         (p).x = (r).x * (stepr).x; \
         (p).y = (r).y * (stepr).y; \

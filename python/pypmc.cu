@@ -1,6 +1,8 @@
 #include <Python.h>
 #include "structmember.h"
 #include "main.h"
+#define PY_ARRAY_UNIQUE_SYMBOL cool_ARRAY_API
+#include <numpy/arrayobject.h>
 
 #if PYTHON == 2
 #undef PyLong_Check
@@ -17,6 +19,7 @@ typedef struct {
 
     PyObject *py_pathlength, *py_momentum_transfer;
     PyObject *py_medium;
+    PyArrayObject *py_fluence;
 
     ExecConfig conf;
     Simulation sim;
@@ -24,6 +27,7 @@ typedef struct {
 } PyPMC;
 
 static PyObject* pypmc_get_tissueArray( Simulation sim, float *tissueArray );
+static PyArrayObject* pypmc_fluence_to_ndarray( Simulation sim, float *II );
 
 ////////////////////////////////////////////////////////////////////
 //// Fundamental methods
@@ -113,6 +117,7 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
 
     self->py_pathlength = pypmc_get_tissueArray(self->sim, self->sim.lenTiss);
     self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.momTiss);
+    self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.II);
 
     Py_RETURN_NONE;
 }
@@ -150,6 +155,30 @@ pypmc_load_medium( PyPMC *self, PyObject *args )
     self->sim.grid.nIxyz = dim_x * dim_y * dim_z;
 
     Py_RETURN_NONE;
+}
+
+// TODO: investigate if this has undefined behavior
+//       (using local data - ndarray - outside the function).
+static PyArrayObject *
+pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
+{
+    PyArrayObject *ndarray;
+    float *c_array;
+    npy_intp dim[3];
+
+    dim[0] = sim.grid.nIstep.x;
+    dim[1] = sim.grid.nIstep.y;
+    dim[2] = sim.grid.nIstep.z;
+
+    ndarray = (PyArrayObject *) PyArray_SimpleNew(3, dim, NPY_FLOAT);
+    c_array = (float *) PyArray_DATA(ndarray);
+
+    for (int x = 0; x < dim[0]; x++)
+        for (int y = 0; y < dim[1]; y++)
+            for (int z = 0; z < dim[2]; z++)
+                c_array[LIN(x,y,z,0,sim.grid)] = c_fluence[LIN(x,y,z,0,sim.grid)];
+
+    return ndarray;
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -635,6 +664,8 @@ static PyGetSetDef pypmc_getsetters[] = {
 
 static PyMemberDef pypmc_members[] = {
     // Simulation results
+    {"fluence", T_OBJECT_EX, offsetof(PyPMC, py_fluence), READONLY,
+     "fluence"},
     {"pathlength", T_OBJECT_EX, offsetof(PyPMC, py_pathlength), READONLY,
      "the distance travelled by each photon in each type of tissue"},
     {"momentum_transfer", T_OBJECT_EX, offsetof(PyPMC, py_momentum_transfer), READONLY,
@@ -740,6 +771,9 @@ PyInit_pypmc(void)
     // Load module into the interpreter.
     PyModule_AddObject(m, "PyPMC", (PyObject *) &pypmc_Type);
 
+    // Initialize numpy support.
+    import_array();
+
     return m;
 }
 #elif PYTHON == 2
@@ -761,5 +795,8 @@ initpypmc(void)
 
     // Load module into the interpreter.
     PyModule_AddObject(m, "PyPMC", (PyObject *) &pypmc_Type);
+
+    // Initialize numpy support.
+    import_array();
 }
 #endif

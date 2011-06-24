@@ -48,6 +48,10 @@
 
 #define LIN2D(x,y,max_x) ((x) + (y) * (max_x))
 #define LIN3D(x,y,z,max_x,max_y) (LIN2D((x),(y),(max_x)) + (z) * ((max_x) * (max_y)))
+#define LIN(i,j,k,time,grid) (time * grid.nIxyz + \
+                              ((k) - grid.Imin.z) * grid.nIxy + \
+                              ((j) - grid.Imin.y) * grid.nIstep.x + \
+                              ((i) - grid.Imin.x))
 
 // Magic number is "any odd number with a decent mix of 0s and 1s in every byte"
 // - SPWorley at http://forums.nvidia.com/index.php?showtopic=189165
