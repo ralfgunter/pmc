@@ -81,7 +81,7 @@ __device__ void rand_need_more(Real t[RAND_BUF_LEN],Real tbuf[RAND_BUF_LEN]){
     logistic_step(tbuf,t,RAND_BUF_LEN-1);
 }
 
-__device__ void logistic_init(Real *t,Real *tnew,uint seed[],uint idx){
+__device__ void logistic_init(Real *t,Real *tnew,uint32_t seed[],uint32_t idx){
      int i;
      for(i=0;i<RAND_BUF_LEN;i++)
            t[i]=(Real)seed[idx*RAND_BUF_LEN+i]*R_MAX_C_RAND;
@@ -93,7 +93,7 @@ __device__ void logistic_init(Real *t,Real *tnew,uint seed[],uint idx){
 __device__ Real rand_uniform01(Real v){
     return logistic_uniform(v);
 }
-__device__ void gpu_rng_init(Real t[RAND_BUF_LEN], Real tnew[RAND_BUF_LEN], uint *n_seed, uint idx){
+__device__ void gpu_rng_init(Real t[RAND_BUF_LEN], Real tnew[RAND_BUF_LEN], uint32_t *n_seed, uint32_t idx){
     logistic_init(t,tnew,n_seed,idx);
 }
 // generate [0,1] random number for the next scattering length
