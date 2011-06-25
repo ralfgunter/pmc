@@ -1,13 +1,24 @@
 .PHONY: python2 python3
 
+OS = $(shell uname -s)
+
 DEV_SRC  = $(wildcard *.cu)
 DEV_OBJ  = $(DEV_SRC:%.cu=obj/%.o)
 HOST_SRC = $(wildcard *.cc)
 HOST_OBJ = $(HOST_SRC:%.cc=obj/%.o)
 
 LINK_FLAGS = -lm
-NVCC_FLAGS = -Xcompiler -fPIC -I ~/NVIDIA_GPU_Computing_SDK/C/common/inc
+NVCC_FLAGS = -Xcompiler -fPIC
 GCC_FLAGS  = -fPIC
+
+# OS X idiosyncrasy: nvcc seems to default to 32-bits,
+# while gcc produces 64-bits binaries 
+ifeq ($(OS), Darwin)
+GCC_FLAGS += -m64
+NVCC_FLAGS += -m64
+LINK_FLAGS += -m64
+endif
+
 
 all: opt
 
