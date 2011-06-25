@@ -3,12 +3,12 @@
 #include <stdio.h>
 
 // Host functions
-Bitset2D bitset_new(uint dim_x, uint dim_y)
+Bitset2D bitset_new(uint32_t dim_x, uint32_t dim_y)
 {
     Bitset2D b;
-    uint num_y = (dim_y + BITS_PER_UINT - 1) / BITS_PER_UINT;
-    uint num_elements = dim_x * num_y;
-    uint *matrix = (uint *) calloc(num_elements, sizeof(uint));
+    uint32_t num_y = (dim_y + BITS_PER_UINT - 1) / BITS_PER_UINT;
+    uint32_t num_elements = dim_x * num_y;
+    uint32_t *matrix = (uint32_t *) calloc(num_elements, sizeof(uint32_t));
 
     b.matrix = matrix;
     b.num_x = dim_x;
@@ -22,12 +22,12 @@ void bitset_free(Bitset2D b)
     free(b.matrix);
 }
 
-uint bitset_size(Bitset2D b)
+uint32_t bitset_size(Bitset2D b)
 {
     return b.num_x * b.num_y;
 }
 
-uint bitset_get(Bitset2D b, uint x, uint y)
+uint32_t bitset_get(Bitset2D b, uint32_t x, uint32_t y)
 {
     return (b.matrix[MATRIX_IDX(x,y,b.num_y)] >> UINT_IDX(y)) & 0x01;
 }

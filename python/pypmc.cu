@@ -1,33 +1,4 @@
-#include <Python.h>
-#include "structmember.h"
-#include "main.h"
-#define PY_ARRAY_UNIQUE_SYMBOL cool_ARRAY_API
-#include <numpy/arrayobject.h>
-
-#if PYTHON == 2
-#undef PyLong_Check
-#undef PyLong_AsLong 
-#undef PyLong_FromLong 
-
-#define PyLong_Check PyInt_Check
-#define PyLong_AsLong PyInt_AsLong
-#define PyLong_FromLong PyInt_FromLong
-#endif
-
-typedef struct {
-    PyObject_HEAD
-
-    PyObject *py_pathlength, *py_momentum_transfer;
-    PyObject *py_medium;
-    PyArrayObject *py_fluence;
-
-    ExecConfig conf;
-    Simulation sim;
-    GPUMemory gmem;
-} PyPMC;
-
-static PyObject* pypmc_get_tissueArray( Simulation sim, float *tissueArray );
-static PyArrayObject* pypmc_fluence_to_ndarray( Simulation sim, float *II );
+#include "pypmc.h"
 
 ////////////////////////////////////////////////////////////////////
 //// Fundamental methods
@@ -583,7 +554,7 @@ pypmc_get_fluence_box( PyPMC *self, void *closure )
 static PyObject*
 pypmc_get_tissueArray( Simulation sim, float *tissueArray )
 {
-    uint photonIndex, k;
+    uint32_t photonIndex, k;
     int detIndex, tissueIndex;
     PyObject *py_tissueArray = Py_BuildValue("[]");
 

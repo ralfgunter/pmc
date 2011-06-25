@@ -26,7 +26,7 @@ __constant__ Simulation s;
 __constant__ GPUMemory g;
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(float *t, float gg, uchar tissueIndex, uint photonIndex, float3 *d)
+__device__ void henyey_greenstein(float *t, float gg, uint8_t tissueIndex, uint32_t photonIndex, float3 *d)
 {
     float3 d0;
     float rand;
@@ -70,7 +70,7 @@ __device__ void henyey_greenstein(float *t, float gg, uchar tissueIndex, uint ph
     }
 }
 
-__global__ void run_simulation(uint *seed, int photons_per_thread, int iteration)
+__global__ void run_simulation(uint32_t *seed, int photons_per_thread, int iteration)
 {
     __shared__ int4 detLoc[MAX_DETECTORS + MAX_TISSUES];
     float4 *tissueProp = (float4 *) detLoc + MAX_DETECTORS;
@@ -78,9 +78,9 @@ __global__ void run_simulation(uint *seed, int photons_per_thread, int iteration
     // Loop index
     int i;
 
-    uint threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
+    uint32_t threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
-    uchar tissueIndex;   // tissue type of the current voxel
+    uint8_t tissueIndex;   // tissue type of the current voxel
     int time;            // time elapsed since the photon was launched
     float step;
     float musr;
@@ -98,7 +98,7 @@ __global__ void run_simulation(uint *seed, int photons_per_thread, int iteration
     int photons_run = 0;
     while(photons_run < photons_per_thread)
     {
-        uint photonIndex = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
+        uint32_t photonIndex = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
         photons_run++;
 
         // Set the photon weight to 1 and initialize photon length parameters
@@ -212,7 +212,7 @@ __global__ void run_simulation(uint *seed, int photons_per_thread, int iteration
 // Make sure the source is at an interface.
 void correct_source(Simulation *sim)
 {
-    uchar tissueIndex;
+    uint8_t tissueIndex;
     int3 p;
     float3 r0;
 
@@ -254,8 +254,8 @@ void correct_source(Simulation *sim)
 
 void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
 {
-    uint seed;
-    uint *temp_seed, *d_seed;
+    uint32_t seed;
+    uint32_t *temp_seed, *d_seed;
     int photons_per_iteration = sim.n_photons / conf.n_iterations;
     int photons_per_thread = photons_per_iteration / conf.n_threads;
     int iteration = 0;

@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include <string.h>
 #include <time.h>
@@ -59,11 +60,11 @@
 #define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
 
 
-typedef unsigned int uint;
-typedef unsigned char uchar;
+typedef unsigned int uint32_t;
+typedef unsigned char uint8_t;
 
 typedef struct {
-    uchar ***tissueType; // type of the tissue within the voxel
+    uint8_t ***tissueType; // type of the tissue within the voxel
     int3 dim;       // dimensions of the image file
     float3 stepr;   // inverse of voxel dimensions
     float minstepsize;
@@ -93,7 +94,7 @@ typedef struct {
 } Tissue;
 
 typedef struct {
-    uint n_photons;
+    uint32_t n_photons;
 
     float min_length, max_length;
     float stepT, stepLr;
@@ -112,7 +113,7 @@ typedef struct {
 // Structure holding pointers to the GPU global memory.
 typedef struct {
     // Tissue type index of each voxel.
-    uchar *tissueType;
+    uint8_t *tissueType;
 
     // Location (grid) of each detector, plus its radius.
     int4 *detLoc;
@@ -130,7 +131,7 @@ typedef struct {
     Bitset2D detHit;
 
     // Seed for the random number generator.
-    uint *seed;
+    uint32_t *seed;
 } GPUMemory;
 
 typedef struct {
@@ -153,6 +154,6 @@ extern void retrieve(Simulation *sim, GPUMemory *gmem);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
 extern void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
-extern uint* init_rand_seed(uint seed, ExecConfig conf);
+extern uint32_t* init_rand_seed(uint32_t seed, ExecConfig conf);
 
 #endif // _MAIN_H_

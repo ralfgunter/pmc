@@ -17,7 +17,7 @@ int read_segmentation_file(Simulation *sim, const char *filename)
 {
     FILE *fp;
     int i, j, k;
-    uchar ***tissueType;
+    uint8_t ***tissueType;
 
     printf( "Loading target medium volume from %s\n", filename );
 
@@ -28,13 +28,13 @@ int read_segmentation_file(Simulation *sim, const char *filename)
         return -1;    // TODO: better error handling (possibly through CUDA?)
     }
 
-    tissueType = (uchar ***) malloc(sim->grid.dim.x * sizeof(uchar **));
+    tissueType = (uint8_t ***) malloc(sim->grid.dim.x * sizeof(uint8_t **));
     for( i = 0; i < sim->grid.dim.x; i++ )
     {
-        tissueType[i] = (uchar **) malloc(sim->grid.dim.y * sizeof(uchar *));
+        tissueType[i] = (uint8_t **) malloc(sim->grid.dim.y * sizeof(uint8_t *));
         for( j = 0; j < sim->grid.dim.y; j++ )
         {
-            tissueType[i][j] = (uchar *) malloc(sim->grid.dim.z * sizeof(uchar));
+            tissueType[i][j] = (uint8_t *) malloc(sim->grid.dim.z * sizeof(uint8_t));
         }
     }
 
@@ -220,7 +220,7 @@ int write_results(Simulation sim, const char *input_filename)
     FILE *history, *fluence, *momentum, *pathlength;
     char filename[128];
     int tissueIndex, detIndex;
-    uint k, photonIndex;
+    uint32_t k, photonIndex;
 
     // TODO: check for errors
     sprintf( filename, "%s.his", input_filename );
