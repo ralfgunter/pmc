@@ -90,14 +90,14 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     cudaMalloc((void **) &d_II,      num_II           * sizeof(float));
     cudaMalloc((void **) &d_detHit_matrix, bitset_size(sim->detHit) * sizeof(uint32_t));
 
-    int gpu_mem_spent = sizeof(int4)   * sim->det.num
+    int gpu_mem_spent = sizeof(int4) * sim->det.num
                       + sizeof(float4) * (sim->tiss.num + 1)
                       + sizeof(uint8_t)  * grid_dim
-                      + sizeof(float)  * num_tissueArrays
-                      + sizeof(float)  * num_tissueArrays
-                      + sizeof(float)  * num_II
-                      + sizeof(uint32_t)   * bitset_size(sim->detHit)
-                      + sizeof(uint32_t)   * conf.n_threads * RAND_SEED_LEN;
+                      + sizeof(float) * num_tissueArrays
+                      + sizeof(float) * num_tissueArrays
+                      + sizeof(float) * num_II
+                      + sizeof(uint32_t) * bitset_size(sim->detHit)
+                      + sizeof(uint32_t) * conf.n_threads * RAND_SEED_LEN;
     printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
 
     // Copy simulation memory to the GPU.

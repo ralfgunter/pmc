@@ -217,7 +217,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 // TODO: handle the remaining files to be written.
 int write_results(Simulation sim, const char *input_filename)
 {
-    FILE *history, *fluence, *momentum, *pathlength;
+    FILE *history, *fluence, *dyn;//*momentum, *pathlength;
     char filename[128];
     int tissueIndex, detIndex;
     uint32_t k, photonIndex;
@@ -225,8 +225,10 @@ int write_results(Simulation sim, const char *input_filename)
     // TODO: check for errors
     sprintf( filename, "%s.his", input_filename );
     history    = fopen( filename, "wb" );
-    momentum   = fopen( "momentum_transfer", "w" );
-    pathlength = fopen( "pathlength", "w" );
+    sprintf( filename, "%s.dyn", input_filename );
+    dyn = fopen( filename, "w" );
+    //momentum   = fopen( "momentum_transfer", "w" );
+    //pathlength = fopen( "pathlength", "w" );
 
     if( sim.det.num != 0 )
     {
@@ -244,8 +246,9 @@ int write_results(Simulation sim, const char *input_filename)
                         k = MAD_HASH((photonIndex << 5) | tissueIndex);
 
                         fwrite(&sim.lenTiss[k], sizeof(float), 1, history);
-                        fprintf(pathlength, "%f\n", sim.lenTiss[k]);
-                        fprintf(momentum,   "%f\n", sim.momTiss[k]);       
+                        fprintf(dyn, "%f %f\n", sim.lenTiss[k], sim.momTiss[k]);
+                        //fprintf(pathlength, "%f\n", sim.lenTiss[k]);
+                        //fprintf(momentum,   "%f\n", sim.momTiss[k]);       
                     }
                 }
             }
@@ -271,6 +274,7 @@ int write_results(Simulation sim, const char *input_filename)
     sprintf( filename, "%s.2pt", input_filename );
     fluence = fopen( filename, "wb" );
     if(fluence != NULL) {
+        printf("max_time = %f\n", sim.max_time);
         fwrite( sim.II, sizeof(float), sim.grid.nIxyz * sim.max_time, fluence );
     } else {
         printf( "ERROR: unable to save to %s\n", filename );
@@ -280,8 +284,9 @@ int write_results(Simulation sim, const char *input_filename)
     // Close file handlers.
     fclose(history);
     fclose(fluence);
-    fclose(momentum);
-    fclose(pathlength);
+    fclose(dyn);
+    //fclose(momentum);
+    //fclose(pathlength);
 
     return 0;
 }

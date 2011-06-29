@@ -1,11 +1,11 @@
 OS = $(shell uname -s)
-ARCH = $(shell uname -p)
+ARCH = $(shell uname -m)
 
 # Default is to compile against python 3.x
 all: python3
 PY_VERSION = 3
 
-# Python 3
+# Python 3.2
 P3_NUMPY_INC = -I$(shell python3.2 -c "import numpy; print(numpy.get_include())") 
 P3_INCS = $(shell python3.2-config --includes) $(P3_NUMPY_INC)
 P3_LINK = $(shell python3.2-config --ldflags)

@@ -9,10 +9,10 @@ obj.n_iterations = 4
 obj.rand_seed = 32898232
 
 print("n_photons")
-obj.n_photons = 2**22
+obj.n_photons = 2**24
 
 print("detectors")
-obj.detectors = [[(75, 35, 10), 1]]
+obj.detectors = [[(73, 33, 8), 1]]
 
 print("tissues")
 obj.tissues = [(1.0 / 1.1, 0.01, 0.05, 1.0)]
