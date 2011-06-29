@@ -145,7 +145,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                     if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
                         p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
                         p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
-                        time < s.max_time )
+                        time < s.num_time_steps )
                         g.II[LIN(p.x, p.y, p.z, time, s.grid)] += P2pt;
 
                     Lnext += s.grid.minstepsize;
@@ -194,7 +194,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
                     p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
                     p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
-                    time < s.max_time )
+                    time < s.num_time_steps )
                     g.II[LIN(p.x, p.y, p.z, time, s.grid)] -= P2pt;
 
                 // Loop through number of detectors

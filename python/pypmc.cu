@@ -134,20 +134,21 @@ static PyArrayObject *
 pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
 {
     PyArrayObject *ndarray;
-    float *c_array;
-    npy_intp dim[3];
+    npy_intp dim[4], *strides;
 
     dim[0] = sim.grid.nIstep.x;
     dim[1] = sim.grid.nIstep.y;
     dim[2] = sim.grid.nIstep.z;
+    dim[3] = sim.num_time_steps;
 
-    ndarray = (PyArrayObject *) PyArray_SimpleNew(3, dim, NPY_FLOAT);
-    c_array = (float *) PyArray_DATA(ndarray);
+    ndarray = (PyArrayObject *) PyArray_SimpleNewFromData(4, dim, NPY_FLOAT, c_fluence);
 
-    for (int x = 0; x < dim[0]; x++)
-        for (int y = 0; y < dim[1]; y++)
-            for (int z = 0; z < dim[2]; z++)
-                c_array[LIN(x,y,z,0,sim.grid)] = c_fluence[LIN(x,y,z,0,sim.grid)];
+    strides = PyArray_STRIDES(ndarray);
+
+    PyArray_STRIDE(ndarray, 0) = strides[3];
+    PyArray_STRIDE(ndarray, 1) = strides[2];
+    PyArray_STRIDE(ndarray, 2) = strides[1];
+    PyArray_STRIDE(ndarray, 3) = strides[0];
 
     return ndarray;
 }
@@ -405,31 +406,31 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
 static int
 pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
 {
-    double max_time, min_time, time_step;
-    double max_time_float, stepT_r, stepT_too_small;
-    int max_time_int;
+    double num_time_steps, min_time, time_step;
+    double num_time_steps_float, stepT_r, stepT_too_small;
+    int num_time_steps_int;
 
     min_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 0));
-    max_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 1));
+    num_time_steps  = PyFloat_AsDouble(PyTuple_GetItem(value, 1));
     time_step = PyFloat_AsDouble(PyTuple_GetItem(value, 2));
 
 
     // Calculate number of gates, taking into account floating point division errors.
-    max_time_float = (max_time - min_time) / time_step;
-    max_time_int   = (int) max_time_float;
-    stepT_r = absf(max_time_float - max_time_int) * time_step;
+    num_time_steps_float = (num_time_steps - min_time) / time_step;
+    num_time_steps_int   = (int) num_time_steps_float;
+    stepT_r = absf(num_time_steps_float - num_time_steps_int) * time_step;
     stepT_too_small = FP_DIV_ERR * time_step;
     if(stepT_r < stepT_too_small)
-        max_time = max_time_int;
+        num_time_steps = num_time_steps_int;
     else
-        max_time = ceil(max_time_float);
+        num_time_steps = ceil(num_time_steps_float);
 
     // Calculate the min/max photon trajectory length from the min/max propagation time.
-    self->sim.max_length     = max_time * C_VACUUM / self->sim.tiss.prop[1].w;
+    self->sim.max_length     = num_time_steps * C_VACUUM / self->sim.tiss.prop[1].w;
     self->sim.min_length     = min_time * C_VACUUM / self->sim.tiss.prop[1].w;
     self->sim.stepLr = 1.0 / (time_step * C_VACUUM / self->sim.tiss.prop[1].w);
 
-    self->sim.max_time = max_time;
+    self->sim.num_time_steps = num_time_steps;
     self->sim.stepT = time_step;
 
     return 0;

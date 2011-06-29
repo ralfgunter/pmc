@@ -98,7 +98,7 @@ typedef struct {
 
     float min_length, max_length;
     float stepT, stepLr;
-    float max_time;
+    int num_time_steps;
     Bitset2D detHit;
 
     float *lenTiss, *momTiss;

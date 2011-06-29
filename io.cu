@@ -78,8 +78,8 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     double stepT_r, stepT_too_small;   // stepT_r remainder gate width 
 
     double min_length, max_length;  // min and max length allowed for the photon to propagate
-    double max_time_float;
-    int max_time, max_time_int;
+    double num_time_steps_float;
+    int num_time_steps, num_time_steps_int;
 
     int num_dets;   // specify number of detectors
     int4 *det;      // grid position of each detector, plus its radius
@@ -157,14 +157,14 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     fclose(fp);
 
     // Calculate number of gates, taking into account floating point division errors.
-    max_time_float = (maxT - minT) / stepT;
-    max_time_int   = (int) max_time_float;
-    stepT_r = absf(max_time_float - max_time_int) * stepT;
+    num_time_steps_float = (maxT - minT) / stepT;
+    num_time_steps_int   = (int) num_time_steps_float;
+    stepT_r = absf(num_time_steps_float - num_time_steps_int) * stepT;
     stepT_too_small = FP_DIV_ERR * stepT;
     if(stepT_r < stepT_too_small)
-        max_time = max_time_int;
+        num_time_steps = num_time_steps_int;
     else
-        max_time = ceil(max_time_float);
+        num_time_steps = ceil(num_time_steps_float);
 
     // Get the minimum dimension.
     minstepsize = MIN(vox_dim.x, MIN(vox_dim.y, vox_dim.z)); 
@@ -181,7 +181,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     stepL     = stepT * C_VACUUM / tissProp[1].w;
 
     // Copy data to the simulation struct.
-    sim->max_time = max_time;
+    sim->num_time_steps = num_time_steps;
     sim->min_length = min_length;
     sim->max_length = max_length;
     sim->stepLr = 1.0 / stepL;  // as with tmusr
@@ -224,7 +224,7 @@ int write_results(Simulation sim, const char *input_filename)
 
     // TODO: check for errors
     sprintf( filename, "%s.his", input_filename );
-    history    = fopen( filename, "wb" );
+    history = fopen( filename, "wb" );
     sprintf( filename, "%s.dyn", input_filename );
     dyn = fopen( filename, "w" );
     //momentum   = fopen( "momentum_transfer", "w" );
@@ -274,8 +274,7 @@ int write_results(Simulation sim, const char *input_filename)
     sprintf( filename, "%s.2pt", input_filename );
     fluence = fopen( filename, "wb" );
     if(fluence != NULL) {
-        printf("max_time = %f\n", sim.max_time);
-        fwrite( sim.II, sizeof(float), sim.grid.nIxyz * sim.max_time, fluence );
+        fwrite( sim.II, sizeof(float), sim.grid.nIxyz * sim.num_time_steps, fluence );
     } else {
         printf( "ERROR: unable to save to %s\n", filename );
         return -1;

@@ -72,7 +72,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     sim->momTiss = (float *) calloc(num_tissueArrays, sizeof(float));
 
     // Photon fluence.
-    num_II = sim->grid.nIxyz * sim->max_time;
+    num_II = sim->grid.nIxyz * sim->num_time_steps;
     sim->II = (float *) calloc(num_II, sizeof(float));
 
     // Bitset indicating which detectors (if any) were hit by which photons.
@@ -190,7 +190,7 @@ void retrieve(Simulation *sim, GPUMemory *gmem)
 {
     //size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(float);
     size_t sizeof_tissueArrays = (1 << NUM_HASH_BITS) * sizeof(float);
-    size_t sizeof_II = sim->grid.nIxyz * sim->max_time * sizeof(float);
+    size_t sizeof_II = sim->grid.nIxyz * sim->num_time_steps * sizeof(float);
     size_t sizeof_detHit = bitset_size(sim->detHit) * sizeof(uint32_t);
 
     TO_HOST(sim->lenTiss, gmem->lenTiss, sizeof_tissueArrays);
