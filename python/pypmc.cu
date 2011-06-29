@@ -134,7 +134,7 @@ static PyArrayObject *
 pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
 {
     PyArrayObject *ndarray;
-    npy_intp dim[4], *strides;
+    npy_intp dim[4];
 
     dim[0] = sim.grid.nIstep.x;
     dim[1] = sim.grid.nIstep.y;
@@ -143,12 +143,10 @@ pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
 
     ndarray = (PyArrayObject *) PyArray_SimpleNewFromData(4, dim, NPY_FLOAT, c_fluence);
 
-    strides = PyArray_STRIDES(ndarray);
-
-    PyArray_STRIDE(ndarray, 0) = strides[3];
-    PyArray_STRIDE(ndarray, 1) = strides[2];
-    PyArray_STRIDE(ndarray, 2) = strides[1];
-    PyArray_STRIDE(ndarray, 3) = strides[0];
+    PyArray_STRIDE(ndarray, 0) = sizeof(float);
+    PyArray_STRIDE(ndarray, 1) = sizeof(float) * sim.grid.nIstep.x;
+    PyArray_STRIDE(ndarray, 2) = sizeof(float) * sim.grid.nIxy;
+    PyArray_STRIDE(ndarray, 3) = sizeof(float) * sim.grid.nIxyz;
 
     return ndarray;
 }

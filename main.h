@@ -59,10 +59,6 @@
 // multiply-add code from wikipedia
 #define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
 
-
-typedef unsigned int uint32_t;
-typedef unsigned char uint8_t;
-
 typedef struct {
     uint8_t ***tissueType; // type of the tissue within the voxel
     int3 dim;       // dimensions of the image file
