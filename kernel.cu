@@ -180,7 +180,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 henyey_greenstein(t, tissueProp[tissueIndex].z, tissueIndex, photonIndex, &d);
         } // loop until end of single photon
 
-        // Score exiting photon and save history files
+        // Score exiting photon
         MOVE(p, r, s.grid.stepr);
 
         if ( p.x >= 0 && p.x < s.grid.dim.x &&

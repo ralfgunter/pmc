@@ -404,17 +404,17 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
 static int
 pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
 {
-    double num_time_steps, min_time, time_step;
+    double max_time, min_time, time_step;
     double num_time_steps_float, stepT_r, stepT_too_small;
-    int num_time_steps_int;
+    int num_time_steps_int, num_time_steps;
 
     min_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 0));
-    num_time_steps  = PyFloat_AsDouble(PyTuple_GetItem(value, 1));
+    max_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 1));
     time_step = PyFloat_AsDouble(PyTuple_GetItem(value, 2));
 
 
     // Calculate number of gates, taking into account floating point division errors.
-    num_time_steps_float = (num_time_steps - min_time) / time_step;
+    num_time_steps_float = (max_time - min_time) / time_step;
     num_time_steps_int   = (int) num_time_steps_float;
     stepT_r = absf(num_time_steps_float - num_time_steps_int) * time_step;
     stepT_too_small = FP_DIV_ERR * time_step;
@@ -424,9 +424,13 @@ pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
         num_time_steps = ceil(num_time_steps_float);
 
     // Calculate the min/max photon trajectory length from the min/max propagation time.
-    self->sim.max_length     = num_time_steps * C_VACUUM / self->sim.tiss.prop[1].w;
+    self->sim.max_length     = max_time * C_VACUUM / self->sim.tiss.prop[1].w;
     self->sim.min_length     = min_time * C_VACUUM / self->sim.tiss.prop[1].w;
     self->sim.stepLr = 1.0 / (time_step * C_VACUUM / self->sim.tiss.prop[1].w);
+    printf("num_time_steps = %d\n", num_time_steps);
+    printf("max, min, stepLr = %lf, %lf, %lf\n", self->sim.max_length,
+                                                 self->sim.min_length,
+                                                 self->sim.stepLr);
 
     self->sim.num_time_steps = num_time_steps;
     self->sim.stepT = time_step;

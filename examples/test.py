@@ -4,12 +4,12 @@ print("criar objeto")
 obj = pypmc.PyPMC()
 
 print("ExecConfig")
-obj.n_threads = 4096
+obj.n_threads = 2048
 obj.n_iterations = 4
 obj.rand_seed = 32898232
 
 print("n_photons")
-obj.n_photons = 2**24
+obj.n_photons = 2**22
 
 print("detectors")
 obj.detectors = [[(73, 33, 8), 1]]
@@ -21,7 +21,7 @@ print("grid_dimensions")
 obj.grid_dimensions = ((250, 10.0), (70, 10.0), (60, 10.0))
 
 print("time_params")
-obj.time_params = (0, 5e-9, 5e-9)
+obj.time_params = (0, 5e-10, 1e-10)
 
 print("load_medium")
 obj.load_medium("MouseLimb.bin", 250, 70, 60)
