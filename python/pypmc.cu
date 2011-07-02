@@ -14,7 +14,7 @@ pypmc_dealloc( PyPMC *self )
     // Finally, delete the pypmc object itself.
 #if PYTHON == 3
     Py_TYPE(self)->tp_free((PyObject *) self);
-#elif PYTHON == 2
+#else
     self->ob_type->tp_free((PyObject *) self);
 #endif
 }
@@ -74,6 +74,11 @@ pypmc_write_to_disk( PyPMC *self, PyObject *args )
 static PyObject *
 pypmc_run( PyPMC *self, PyObject *args )
 {
+    // Allocate and initialize memory to be used by the GPU.
+    free_gpu_params_mem(self->gmem);
+    free_gpu_results_mem(self->gmem);
+    init_mem(self->conf, &self->sim, &self->gmem);
+
     // Run simulations on the GPU.
     simulate(self->conf, self->sim, self->gmem);
 
@@ -89,16 +94,6 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     self->py_pathlength = pypmc_get_tissueArray(self->sim, self->sim.lenTiss);
     self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.momTiss);
     self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.II);
-
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-pypmc_push_parameters( PyPMC *self, PyObject *args )
-{
-    // Allocate and initialize memory to be used by the GPU.
-    free_gpu_mem(self->gmem);
-    init_mem(self->conf, &self->sim, &self->gmem);
 
     Py_RETURN_NONE;
 }
@@ -653,8 +648,6 @@ static PyMethodDef pypmc_methods[] = {
      "Does what it says on the tin."},
     {"pull_results", (PyCFunction) pypmc_pull_results, METH_NOARGS,
      "Transfers the simulation results to the host memory."},
-    {"push_parameters", (PyCFunction) pypmc_push_parameters, METH_NOARGS,
-     "Transfers the simulation parameters to the gpu memory."},
     {"write_to_disk", (PyCFunction) pypmc_write_to_disk, METH_VARARGS,
      "Saves the simulation results to disk, the old-fashioned way."},
     {"load_medium", (PyCFunction) pypmc_load_medium, METH_VARARGS,
@@ -666,7 +659,7 @@ static PyMethodDef pypmc_methods[] = {
 static PyTypeObject pypmc_Type = {
 #if PYTHON == 3
     PyVarObject_HEAD_INIT(NULL, 0)
-#elif PYTHON == 2
+#else
     PyObject_HEAD_INIT(NULL)
     0,                  
 #endif
@@ -719,7 +712,7 @@ static PyModuleDef pypmc_module = {
 };
 #endif
 
-#if PYTHON == 2
+#if PYTHON != 3
 static PyMethodDef module_methods[] = {
     {NULL}  /* Sentinel */
 };
@@ -750,7 +743,7 @@ PyInit_pypmc(void)
 
     return m;
 }
-#elif PYTHON == 2
+#else
 initpypmc(void)
 {
     PyObject *m;

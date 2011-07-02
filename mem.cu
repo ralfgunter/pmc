@@ -128,7 +128,20 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     free(h_linear_tissueType);
 }
 
-void free_gpu_mem(GPUMemory gmem)
+void free_gpu_results_mem(GPUMemory gmem)
+{
+    // Path length and momentum transfer.
+    cudaFree(gmem.lenTiss);
+    cudaFree(gmem.momTiss);
+
+    // Photon fluence.
+    cudaFree(gmem.II);
+
+    // Bitset of the detectors which were hit by a given photon.
+    cudaFree(gmem.detHit.matrix);  // TODO: properly handle this 
+}
+
+void free_gpu_params_mem(GPUMemory gmem)
 {
     // Tissue types.
     cudaFree(gmem.tissueType);
@@ -139,21 +152,24 @@ void free_gpu_mem(GPUMemory gmem)
     // Optical properties of the different tissue types.
     cudaFree(gmem.tissueProp);
 
-    // Path length and momentum transfer.
-    cudaFree(gmem.lenTiss);
-    cudaFree(gmem.momTiss);
-
-    // Photon fluence.
-    cudaFree(gmem.II);
-
-    // Bitset of the detectors which were hit by a given photon.
-    cudaFree(gmem.detHit.matrix);  // TODO: properly handle this 
-
     // Random number generation.
     cudaFree(gmem.seed);
 }
 
-void free_cpu_mem(Simulation sim)
+void free_cpu_results_mem(Simulation sim)
+{
+    // Path length and momentum transfer.
+    free(sim.lenTiss);
+    free(sim.momTiss);
+
+    // Photon fluence.
+    free(sim.II);
+
+    // Bitset of the detectors which were hit by a given photon.
+    bitset_free(sim.detHit);
+}
+
+void free_cpu_params_mem(Simulation sim)
 {
     // Tissue types.
     for(int i = 0; i < sim.grid.dim.x; i++) {
@@ -169,21 +185,12 @@ void free_cpu_mem(Simulation sim)
 
     // Optical properties of the different tissue types.
     free(sim.tiss.prop);
-
-    // Path length and momentum transfer.
-    free(sim.lenTiss);
-    free(sim.momTiss);
-
-    // Photon fluence.
-    free(sim.II);
-
-    // Bitset of the detectors which were hit by a given photon.
-    bitset_free(sim.detHit);
 }
 
 void free_mem(Simulation sim, GPUMemory gmem)
 {
-    free_gpu_mem(gmem); free_cpu_mem(sim);
+    free_gpu_params_mem(gmem); free_gpu_results_mem(gmem);
+    free_cpu_params_mem(sim);  free_cpu_results_mem(sim);
 }
 
 void retrieve(Simulation *sim, GPUMemory *gmem)
