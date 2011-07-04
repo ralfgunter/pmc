@@ -77,6 +77,9 @@ pypmc_run( PyPMC *self, PyObject *args )
     // Allocate and initialize memory to be used by the GPU.
     free_gpu_params_mem(self->gmem);
     free_gpu_results_mem(self->gmem);
+    // FIXME: this prevents a big memory leak, but introduces unexpected behavior
+    //        the results should be kept untouched until the user calls pull_results.
+    free_cpu_results_mem(self->sim);
     init_mem(self->conf, &self->sim, &self->gmem);
 
     // Run simulations on the GPU.
@@ -320,7 +323,7 @@ pypmc_set_tissues( PyPMC *self, PyObject *tissue_list, void *closure )
     {
         entry = PyList_GetItem(tissue_list, i);
 
-        self->sim.tiss.prop[i + 1].x = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
+        self->sim.tiss.prop[i + 1].x = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
         self->sim.tiss.prop[i + 1].y = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 1));
         self->sim.tiss.prop[i + 1].z = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 2));
         self->sim.tiss.prop[i + 1].w = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 3));
@@ -344,15 +347,15 @@ pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
 
     dim = PyTuple_GetItem(dimensions, 0);
     self->sim.grid.dim.x = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.stepr.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+    self->sim.grid.stepr.x = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     dim = PyTuple_GetItem(dimensions, 1);
     self->sim.grid.dim.y = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.stepr.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+    self->sim.grid.stepr.y = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     dim = PyTuple_GetItem(dimensions, 2);
     self->sim.grid.dim.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.stepr.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+    self->sim.grid.stepr.z = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
 
     // Get the minimum dimension.
     self->sim.grid.minstepsize = MIN(1.0 / self->sim.grid.stepr.x,
@@ -508,7 +511,7 @@ pypmc_get_tissues( PyPMC *self, void *closure )
 
     for (int i = 1; i <= self->sim.tiss.num; ++i)
     {
-        entry = Py_BuildValue("(ffff)", self->sim.tiss.prop[i].x,
+        entry = Py_BuildValue("(ffff)", 1.0 / self->sim.tiss.prop[i].x,
                                         self->sim.tiss.prop[i].y,
                                         self->sim.tiss.prop[i].z,
                                         self->sim.tiss.prop[i].w);
@@ -525,9 +528,9 @@ pypmc_get_grid_dimensions( PyPMC *self, void *closure )
     PyObject *dim_x, *dim_y, *dim_z;
     PyObject *dimensions;
 
-    dim_x = Py_BuildValue("(if)", self->sim.grid.dim.x, self->sim.grid.stepr.x);
-    dim_y = Py_BuildValue("(if)", self->sim.grid.dim.y, self->sim.grid.stepr.y);
-    dim_z = Py_BuildValue("(if)", self->sim.grid.dim.z, self->sim.grid.stepr.z);
+    dim_x = Py_BuildValue("(if)", self->sim.grid.dim.x, 1.0 / self->sim.grid.stepr.x);
+    dim_y = Py_BuildValue("(if)", self->sim.grid.dim.y, 1.0 / self->sim.grid.stepr.y);
+    dim_z = Py_BuildValue("(if)", self->sim.grid.dim.z, 1.0 / self->sim.grid.stepr.z);
 
     dimensions = Py_BuildValue("(NNN)", dim_x, dim_y, dim_z);
 

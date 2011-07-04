@@ -1,20 +1,24 @@
 import pypmc
 
+max_time = 2e-10
+step     = 0.5e-10
+num_steps = int(max_time / step)
+
 obj = pypmc.PyPMC()
 
 obj.n_threads = 4096
-obj.n_iterations = 8
+obj.n_iterations = 4
 obj.rand_seed = 32898232
 
 obj.n_photons = 2**23
 
 obj.detectors = [[(73, 33, 8), 1]]
 
-obj.tissues = [(1.0 / 1.1, 0.01, 0.05, 1.0)]
+obj.tissues = [(1.1, 0.01, 0.05, 1.0)]
 
-obj.grid_dimensions = ((250, 10.0), (70, 10.0), (60, 10.0))
+obj.grid_dimensions = ((250, 0.1), (70, 0.1), (60, 0.1))
 
-obj.time_params = (0, 5e-09, 5e-09)
+obj.time_params = (0, max_time, step)
 
 obj.load_medium("MouseLimb.bin", 250, 70, 60)
 
@@ -28,4 +32,6 @@ obj.run_simulation()
 
 obj.pull_results()
 
-obj.write_to_disk("out")
+print("Fluence results:")
+for i in range(num_steps):
+    print("t" + repr(i) + " = " + repr(obj.fluence[73][33][12][i]))
