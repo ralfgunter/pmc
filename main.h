@@ -152,6 +152,6 @@ extern void retrieve(Simulation *sim, GPUMemory *gmem);
 extern void correct_source(Simulation *sim);
 extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
 extern void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
-extern uint32_t* init_rand_seed(uint32_t seed, ExecConfig conf);
+extern uint32_t* init_rand_seed(int seed, ExecConfig conf);
 
 #endif // _MAIN_H_

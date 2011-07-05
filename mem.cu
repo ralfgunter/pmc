@@ -22,7 +22,7 @@ void linearize_3d(type ***t, type *l, int dim_x, int dim_y, int dim_z)
                 l[LIN3D(x,y,z,dim_x,dim_y)] = t[x][y][z];
 }
 
-uint32_t* init_rand_seed(uint32_t seed, ExecConfig conf)
+uint32_t* init_rand_seed(int seed, ExecConfig conf)
 {
     uint32_t *h_seed, *d_seed;
     size_t sizeof_seed;
