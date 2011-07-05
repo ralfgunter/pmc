@@ -267,7 +267,7 @@ pypmc_set_src_dir( PyPMC *self, PyObject *dir_cosines, void *closure )
 static int
 pypmc_set_detectors( PyPMC *self, PyObject *det_list, void *closure )
 {
-    PyObject *entry, *det_pos, *det_radius;
+    PyObject *entry;
     Py_ssize_t num_detectors;
 
     if (! PyList_Check(det_list))
@@ -287,13 +287,11 @@ pypmc_set_detectors( PyPMC *self, PyObject *det_list, void *closure )
     for (int i = 0; i < num_detectors; ++i)
     {
         entry = PyList_GetItem(det_list, i);
-        det_pos = PyList_GetItem(entry, 0);
-        det_radius = PyList_GetItem(entry, 1);
 
-        self->sim.det.info[i].x = PyLong_AsLong(PyTuple_GetItem(det_pos, 0));
-        self->sim.det.info[i].y = PyLong_AsLong(PyTuple_GetItem(det_pos, 1));
-        self->sim.det.info[i].z = PyLong_AsLong(PyTuple_GetItem(det_pos, 2));
-        self->sim.det.info[i].w = PyLong_AsLong(det_radius);
+        self->sim.det.info[i].x = PyLong_AsLong(PyTuple_GetItem(entry, 0));
+        self->sim.det.info[i].y = PyLong_AsLong(PyTuple_GetItem(entry, 1));
+        self->sim.det.info[i].z = PyLong_AsLong(PyTuple_GetItem(entry, 2));
+        self->sim.det.info[i].w = PyLong_AsLong(PyTuple_GetItem(entry, 3));
     }
 
     return 0;
@@ -487,15 +485,14 @@ static PyObject*
 pypmc_get_detectors( PyPMC *self, void *closure )
 {
     PyObject *det_list = Py_BuildValue("[]");
-    PyObject *det_entry, *det_pos, *det_radius;
+    PyObject *det_entry;
 
     for (int i = 0; i < self->sim.det.num; ++i)
     {
-        det_pos = Py_BuildValue("(iii)", self->sim.det.info[i].x,
-                                         self->sim.det.info[i].y,
-                                         self->sim.det.info[i].z);
-        det_radius = PyLong_FromLong(self->sim.det.info[i].w);
-        det_entry = Py_BuildValue("[NN]", det_pos, det_radius);
+        det_entry = Py_BuildValue("(iiii)", self->sim.det.info[i].x,
+                                            self->sim.det.info[i].y,
+                                            self->sim.det.info[i].z,
+                                            self->sim.det.info[i].w);
 
         PyList_Append(det_list, det_entry);
     }
@@ -715,7 +712,7 @@ static PyModuleDef pypmc_module = {
 };
 #endif
 
-#if PYTHON != 3
+#if PYTHON == 2
 static PyMethodDef module_methods[] = {
     {NULL}  /* Sentinel */
 };

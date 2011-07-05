@@ -1,18 +1,18 @@
 import pypmc
 
-max_time = 2e-10
-step     = 0.5e-10
+max_time = 1e-10
+step     = 0.1e-10
 num_steps = int(max_time / step)
 
 obj = pypmc.PyPMC()
 
-obj.n_threads = 4096
-obj.n_iterations = 4
+obj.n_threads = 4096 
+obj.n_iterations = 2
 obj.rand_seed = 32898232
 
-obj.n_photons = 2**23
+obj.n_photons = 2**21
 
-obj.detectors = [[(73, 33, 8), 1]]
+obj.detectors = [(73, 33, 8, 1)]
 
 obj.tissues = [(1.1, 0.01, 0.05, 1.0)]
 
