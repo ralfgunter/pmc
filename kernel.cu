@@ -89,8 +89,8 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     float t[RAND_BUF_LEN], tnew[RAND_BUF_LEN];
 
     detLoc[threadIdx.x] = g.detLoc[threadIdx.x];
-    tissueProp[2*threadIdx.x] = g.tissueProp[2*threadIdx.x];
-    tissueProp[2*threadIdx.x + 1] = g.tissueProp[2*threadIdx.x + 1];
+    detLoc[2*threadIdx.x] = g.detLoc[2*threadIdx.x];
+    tissueProp[threadIdx.x] = g.tissueProp[threadIdx.x];
     __syncthreads();
 
     gpu_rng_init(t, tnew, seed, threadIndex);

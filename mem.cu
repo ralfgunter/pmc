@@ -82,17 +82,17 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 
     // Allocate memory on the GPU global memory.
     // TODO: use constant memory where appropriate 
-    cudaMalloc((void **) &d_detLoc, sim->det.num * sizeof(int4));
-    cudaMalloc((void **) &d_tissueProp, (sim->tiss.num + 1) * sizeof(float4));
+    cudaMalloc((void **) &d_detLoc, MAX_DETECTORS * sizeof(int4));
+    cudaMalloc((void **) &d_tissueProp, (MAX_TISSUES + 1) * sizeof(float4));
     cudaMalloc((void **) &d_tissueType, grid_dim * sizeof(uint8_t));
     cudaMalloc((void **) &d_lenTiss, num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_momTiss, num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_II,      num_II           * sizeof(float));
     cudaMalloc((void **) &d_detHit_matrix, bitset_size(sim->detHit) * sizeof(uint32_t));
 
-    int gpu_mem_spent = sizeof(int4) * sim->det.num
-                      + sizeof(float4) * (sim->tiss.num + 1)
-                      + sizeof(uint8_t)  * grid_dim
+    int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
+                      + sizeof(float4) * (MAX_TISSUES + 1)
+                      + sizeof(uint8_t) * grid_dim
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_II
@@ -104,8 +104,8 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     //cudaMemcpyToSymbol("detLoc", sim->det.info, sim->det.num * sizeof(int4));
     //cudaMemcpyToSymbol("tissueProp", sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
     cudaMemcpyToSymbol("s", sim, sizeof(Simulation));
-    TO_DEVICE(d_detLoc, sim->det.info, sim->det.num * sizeof(int4));
-    TO_DEVICE(d_tissueProp, sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
+    TO_DEVICE(d_detLoc, sim->det.info, MAX_DETECTORS * sizeof(int4));
+    TO_DEVICE(d_tissueProp, sim->tiss.prop, (MAX_TISSUES + 1) * sizeof(float4));
     TO_DEVICE(d_tissueType, h_linear_tissueType, grid_dim * sizeof(uint8_t));
     TO_DEVICE(d_lenTiss, sim->lenTiss, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_momTiss, sim->momTiss, num_tissueArrays * sizeof(float));

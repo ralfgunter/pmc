@@ -16,7 +16,7 @@
 int main(int argc, char *argv[])
 {
     if (argc != 4) {
-        printf( "usage: %s input_file.inp n_threads n_iterations\n", argv[0]);
+        printf("usage: %s input_file.inp n_threads n_iterations\n", argv[0]);
         exit(1);
     }
 
