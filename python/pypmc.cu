@@ -10,6 +10,7 @@ pypmc_dealloc( PyPMC *self )
 
     Py_XDECREF(self->py_pathlength);
     Py_XDECREF(self->py_momentum_transfer);
+    Py_XDECREF(self->py_fluence);
 
     // Finally, delete the pypmc object itself.
 #if PYTHON == 3
