@@ -76,7 +76,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     sim->fbox = (float *) calloc(num_fbox, sizeof(float));
 
     // Bitset indicating which detectors (if any) were hit by which photons.
-    sim->det_hit = bitset_new(sim->n_photons, sim->det.num);
+    sim->det.hit = bitset_new(sim->n_photons, sim->det.num);
 
     d_seed = init_rand_seed(conf.rand_seed, conf);
 
@@ -88,7 +88,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     cudaMalloc((void **) &d_path_length, num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_mom_transfer, num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_fbox,      num_fbox           * sizeof(float));
-    cudaMalloc((void **) &d_det_hit_matrix, bitset_size(sim->det_hit) * sizeof(uint32_t));
+    cudaMalloc((void **) &d_det_hit_matrix, bitset_size(sim->det.hit) * sizeof(uint32_t));
 
     int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
                       + sizeof(float4) * (MAX_TISSUES + 1)
@@ -96,7 +96,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_fbox
-                      + sizeof(uint32_t) * bitset_size(sim->det_hit)
+                      + sizeof(uint32_t) * bitset_size(sim->det.hit)
                       + sizeof(uint32_t) * conf.n_threads * RAND_SEED_LEN;
     printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
 
@@ -110,7 +110,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     TO_DEVICE(d_path_length, sim->path_length, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_mom_transfer, sim->mom_transfer, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_fbox,      sim->fbox,      num_fbox           * sizeof(float));
-    TO_DEVICE(d_det_hit_matrix, sim->det_hit.matrix, bitset_size(sim->det_hit) * sizeof(uint32_t));
+    TO_DEVICE(d_det_hit_matrix, sim->det.hit.matrix, bitset_size(sim->det.hit) * sizeof(uint32_t));
 
     // Update GPU memory structure (so that its pointers can be used elsewhere).
     gmem->det_loc = d_det_loc;
@@ -119,7 +119,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     gmem->path_length = d_path_length;
     gmem->mom_transfer = d_mom_transfer;
     gmem->fbox = d_fbox;
-    gmem->det_hit = sim->det_hit;
+    gmem->det_hit = sim->det.hit;
     gmem->det_hit.matrix = d_det_hit_matrix;
     gmem->seed = d_seed;
     cudaMemcpyToSymbol("g", gmem, sizeof(GPUMemory));
@@ -166,7 +166,7 @@ void free_cpu_results_mem(Simulation sim)
     free(sim.fbox);
 
     // Bitset of the detectors which were hit by a given photon.
-    bitset_free(sim.det_hit);
+    bitset_free(sim.det.hit);
 }
 
 void free_cpu_params_mem(Simulation sim)
@@ -198,10 +198,10 @@ void retrieve(Simulation *sim, GPUMemory *gmem)
     //size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(float);
     size_t sizeof_tissueArrays = (1 << NUM_HASH_BITS) * sizeof(float);
     size_t sizeof_fbox = sim->grid.nIxyz * sim->num_time_steps * sizeof(float);
-    size_t sizeof_det_hit = bitset_size(sim->det_hit) * sizeof(uint32_t);
+    size_t sizeof_det_hit = bitset_size(sim->det.hit) * sizeof(uint32_t);
 
     TO_HOST(sim->path_length, gmem->path_length, sizeof_tissueArrays);
     TO_HOST(sim->mom_transfer, gmem->mom_transfer, sizeof_tissueArrays);
     TO_HOST(sim->fbox, gmem->fbox, sizeof_fbox);
-    TO_HOST(sim->det_hit.matrix, gmem->det_hit.matrix, sizeof_det_hit);
+    TO_HOST(sim->det.hit.matrix, gmem->det_hit.matrix, sizeof_det_hit);
 }

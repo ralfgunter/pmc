@@ -553,21 +553,21 @@ pypmc_get_fluence_box( PyPMC *self, void *closure )
 static PyObject*
 pypmc_get_tissueArray( Simulation sim, float *tissueArray )
 {
-    uint32_t photonIndex, k;
-    int detIndex, tissueIndex;
+    uint32_t photon_idx, k;
+    int det_idx, media_idx;
     PyObject *py_tissueArray = Py_BuildValue("[]");
 
     if( sim.det.num != 0 )
     {
-        for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
+        for( photon_idx = 0; photon_idx < sim.n_photons; photon_idx++ )
         {
-            for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
+            for( det_idx = 0; det_idx < sim.det.num; det_idx++ )
             {
-                if( bitset_get(sim.det_hit, photonIndex, detIndex) == 1 )
+                if( bitset_get(sim.det.hit, photon_idx, det_idx) == 1 )
                 {
-                    for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
+                    for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                     {
-                        k = MAD_HASH((photonIndex << 5) | tissueIndex);
+                        k = MAD_HASH((photon_idx << 5) | media_idx);
 
                         PyList_Append(py_tissueArray, PyFloat_FromDouble(tissueArray[k]));
                     }

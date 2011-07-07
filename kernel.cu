@@ -26,7 +26,7 @@ __constant__ Simulation s;
 __constant__ GPUMemory g;
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(float *t, float gg, uint8_t media_index, uint32_t photon_idx, float3 *d)
+__device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_t photon_idx, float3 *d)
 {
     float3 d0;
     float rand;
@@ -54,7 +54,7 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_index, uint3
     }
 
     if(theta > 0)
-        g.mom_transfer[MAD_HASH((photon_idx << 5) | media_index)] += 1 - ctheta;
+        g.mom_transfer[MAD_HASH((photon_idx << 5) | media_idx)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -80,7 +80,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
 
     uint32_t threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
-    uint8_t media_index;   // tissue type of the current voxel
+    uint8_t media_idx;   // tissue type of the current voxel
     int time;            // time elapsed since the photon was launched
     float step;
     float musr;
@@ -125,7 +125,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                p.x >= 0 && p.x < s.grid.dim.x &&
                p.y >= 0 && p.y < s.grid.dim.y &&
                p.z >= 0 && p.z < s.grid.dim.z &&
-               (media_index = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
+               (media_idx = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
         {
             rand_need_more(t, tnew);
 
@@ -136,7 +136,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                    p.x >= 0 && p.x < s.grid.dim.x &&
                    p.y >= 0 && p.y < s.grid.dim.y &&
                    p.z >= 0 && p.z < s.grid.dim.z &&
-                   (media_index = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
+                   (media_idx = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
             {
                 if(dist > Lnext && dist > s.min_length)
                 {
@@ -151,7 +151,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                     Lnext += s.grid.minstepsize;
                 }
 
-                musr = media_prop[media_index].x;
+                musr = media_prop[media_idx].x;
                 step = Lresid * musr;
                 // If scattering length is likely within a voxel, jump inside one voxel
                 if(s.grid.minstepsize > step) {
@@ -166,18 +166,18 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 r.z += d.z * step;
                 dist += step;
 
-                photon_weight *= expf(-(media_prop[media_index].y) * step);
+                photon_weight *= expf(-(media_prop[media_idx].y) * step);
                 // FIXME: on 32-bits cards, this only works with up to
                 //        (2^5 - 1) tissue types (indexed from 1) and
                 //        2^27 photons (indexed from 0).
-                g.path_length[MAD_HASH((photon_idx << 5) | media_index)] += step;
+                g.path_length[MAD_HASH((photon_idx << 5) | media_idx)] += step;
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon
 
             // Calculate the new scattering angle using henyey-greenstein
-            if(media_index != 0)
-                henyey_greenstein(t, media_prop[media_index].z, media_index, photon_idx, &d);
+            if(media_idx != 0)
+                henyey_greenstein(t, media_prop[media_idx].z, media_idx, photon_idx, &d);
         } // loop until end of single photon
 
         // Score exiting photon
@@ -187,8 +187,8 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
              p.y >= 0 && p.y < s.grid.dim.y &&
              p.z >= 0 && p.z < s.grid.dim.z )
         {
-            media_index = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
-            if(media_index == 0)
+            media_idx = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
+            if(media_idx == 0)
             {
                 time = (int) ((dist - s.min_length) * s.stepLr);
                 if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
@@ -211,7 +211,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
 // Make sure the source is at an interface.
 void correct_source(Simulation *sim)
 {
-    uint8_t media_index;
+    uint8_t media_idx;
     int3 p;
     float3 r0;
 
@@ -220,9 +220,9 @@ void correct_source(Simulation *sim)
 
     MOVE(p, r0, sim->grid.stepr);
 
-    media_index = sim->grid.media_type[p.x][p.y][p.z];
+    media_idx = sim->grid.media_type[p.x][p.y][p.z];
 
-    while( media_index != 0 &&
+    while( media_idx != 0 &&
            p.x > 0 && p.x < sim->grid.dim.x &&
            p.y > 0 && p.y < sim->grid.dim.y &&
            p.z > 0 && p.z < sim->grid.dim.z )
@@ -231,9 +231,9 @@ void correct_source(Simulation *sim)
         r0.y -= sim->src.d.y * sim->grid.minstepsize;
         r0.z -= sim->src.d.z * sim->grid.minstepsize;
         MOVE(p, r0, sim->grid.stepr);
-        media_index = sim->grid.media_type[p.x][p.y][p.z];
+        media_idx = sim->grid.media_type[p.x][p.y][p.z];
     }
-    while( media_index == 0 &&
+    while( media_idx == 0 &&
            p.x > 0 && p.x < sim->grid.dim.x &&
            p.y > 0 && p.y < sim->grid.dim.y &&
            p.z > 0 && p.z < sim->grid.dim.z )
@@ -242,7 +242,7 @@ void correct_source(Simulation *sim)
         r0.y += sim->src.d.y * sim->grid.minstepsize;
         r0.z += sim->src.d.z * sim->grid.minstepsize;
         MOVE(p, r0, sim->grid.stepr);
-        media_index = sim->grid.media_type[p.x][p.y][p.z];
+        media_idx = sim->grid.media_type[p.x][p.y][p.z];
     }
 
     // Update the source coordinates 

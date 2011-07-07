@@ -237,7 +237,7 @@ int write_results(Simulation sim, const char *input_filename)
             // Loop through number of detectors
             for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
             {
-                if( bitset_get(sim.det_hit, photonIndex, detIndex) == 1 )
+                if( bitset_get(sim.det.hit, photonIndex, detIndex) == 1 )
                 {
                     // Write to the history file
                     fwrite(&detIndex, sizeof(int), 1, history);

@@ -82,6 +82,7 @@ typedef struct {
 typedef struct {
     int num;    // specify number of detectors
     int4 *info; // grid coordinates and and radius
+    Bitset2D hit;   // detectors hit by nearby photons
 } Detectors;
 
 typedef struct {
@@ -95,7 +96,6 @@ typedef struct {
     float min_length, max_length;
     float time_step, stepLr;
     int num_time_steps;
-    Bitset2D det_hit;
 
     float *path_length, *mom_transfer;
     float *fbox;
