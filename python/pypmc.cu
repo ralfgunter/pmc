@@ -8,7 +8,7 @@ pypmc_dealloc( PyPMC *self )
     // Call PMC's own cleaning up procedure.
     free_mem(self->sim, self->gmem);
 
-    Py_XDECREF(self->py_pathlength);
+    Py_XDECREF(self->py_path_length);
     Py_XDECREF(self->py_momentum_transfer);
     Py_XDECREF(self->py_fluence);
 
@@ -95,9 +95,9 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
 
-    self->py_pathlength = pypmc_get_tissueArray(self->sim, self->sim.lenTiss);
-    self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.momTiss);
-    self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.II);
+    self->py_path_length = pypmc_get_tissueArray(self->sim, self->sim.path_length);
+    self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.mom_transfer);
+    self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.fbox);
 
     Py_RETURN_NONE;
 }
@@ -118,9 +118,9 @@ pypmc_load_medium( PyPMC *self, PyObject *args )
     read_segmentation_file(&self->sim, medium_filepath);
 
     // TODO: better handle this
-    self->sim.grid.nIstep.x = dim_x;
-    self->sim.grid.nIstep.y = dim_y;
-    self->sim.grid.nIstep.z = dim_z;
+    self->sim.grid.fbox_dim.x = dim_x;
+    self->sim.grid.fbox_dim.y = dim_y;
+    self->sim.grid.fbox_dim.z = dim_z;
     self->sim.grid.nIxy  = dim_x * dim_y;
     self->sim.grid.nIxyz = dim_x * dim_y * dim_z;
 
@@ -135,15 +135,15 @@ pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
     PyArrayObject *ndarray;
     npy_intp dim[4];
 
-    dim[0] = sim.grid.nIstep.x;
-    dim[1] = sim.grid.nIstep.y;
-    dim[2] = sim.grid.nIstep.z;
+    dim[0] = sim.grid.fbox_dim.x;
+    dim[1] = sim.grid.fbox_dim.y;
+    dim[2] = sim.grid.fbox_dim.z;
     dim[3] = sim.num_time_steps;
 
     ndarray = (PyArrayObject *) PyArray_SimpleNewFromData(4, dim, NPY_FLOAT, c_fluence);
 
     PyArray_STRIDE(ndarray, 0) = sizeof(float);
-    PyArray_STRIDE(ndarray, 1) = sizeof(float) * sim.grid.nIstep.x;
+    PyArray_STRIDE(ndarray, 1) = sizeof(float) * sim.grid.fbox_dim.x;
     PyArray_STRIDE(ndarray, 2) = sizeof(float) * sim.grid.nIxy;
     PyArray_STRIDE(ndarray, 3) = sizeof(float) * sim.grid.nIxyz;
 
@@ -378,22 +378,22 @@ pypmc_set_fluence_box( PyPMC *self, PyObject *dimensions, void *closure )
     }
 
     dim = PyTuple_GetItem(dimensions, 0);
-    self->sim.grid.Imin.x = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.Imax.x = PyLong_AsLong(PyTuple_GetItem(dim, 1));
-    self->sim.grid.nIstep.x = self->sim.grid.Imax.x - self->sim.grid.Imin.x + 1;
+    self->sim.grid.fbox_min.x = PyLong_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.fbox_max.x = PyLong_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.fbox_dim.x = self->sim.grid.fbox_max.x - self->sim.grid.fbox_min.x + 1;
 
     dim = PyTuple_GetItem(dimensions, 1);
-    self->sim.grid.Imin.y = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.Imax.y = PyLong_AsLong(PyTuple_GetItem(dim, 1));
-    self->sim.grid.nIstep.y = self->sim.grid.Imax.y - self->sim.grid.Imin.y + 1;
+    self->sim.grid.fbox_min.y = PyLong_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.fbox_max.y = PyLong_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.fbox_dim.y = self->sim.grid.fbox_max.y - self->sim.grid.fbox_min.y + 1;
 
     dim = PyTuple_GetItem(dimensions, 2);
-    self->sim.grid.Imin.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.Imax.z = PyLong_AsLong(PyTuple_GetItem(dim, 1));
-    self->sim.grid.nIstep.z = self->sim.grid.Imax.z - self->sim.grid.Imin.z + 1;
+    self->sim.grid.fbox_min.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
+    self->sim.grid.fbox_max.z = PyLong_AsLong(PyTuple_GetItem(dim, 1));
+    self->sim.grid.fbox_dim.z = self->sim.grid.fbox_max.z - self->sim.grid.fbox_min.z + 1;
 
-    self->sim.grid.nIxy  = self->sim.grid.nIstep.x * self->sim.grid.nIstep.y;
-    self->sim.grid.nIxyz = self->sim.grid.nIxy * self->sim.grid.nIstep.z;
+    self->sim.grid.nIxy  = self->sim.grid.fbox_dim.x * self->sim.grid.fbox_dim.y;
+    self->sim.grid.nIxyz = self->sim.grid.nIxy * self->sim.grid.fbox_dim.z;
 
     return 0;
 }
@@ -402,7 +402,7 @@ static int
 pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
 {
     double max_time, min_time, time_step;
-    double num_time_steps_float, stepT_r, stepT_too_small;
+    double num_time_steps_float, time_step_r, time_step_too_small;
     int num_time_steps_int, num_time_steps;
 
     min_time  = PyFloat_AsDouble(PyTuple_GetItem(value, 0));
@@ -413,9 +413,9 @@ pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
     // Calculate number of gates, taking into account floating point division errors.
     num_time_steps_float = (max_time - min_time) / time_step;
     num_time_steps_int   = (int) num_time_steps_float;
-    stepT_r = absf(num_time_steps_float - num_time_steps_int) * time_step;
-    stepT_too_small = FP_DIV_ERR * time_step;
-    if(stepT_r < stepT_too_small)
+    time_step_r = absf(num_time_steps_float - num_time_steps_int) * time_step;
+    time_step_too_small = FP_DIV_ERR * time_step;
+    if(time_step_r < time_step_too_small)
         num_time_steps = num_time_steps_int;
     else
         num_time_steps = ceil(num_time_steps_float);
@@ -430,7 +430,7 @@ pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
                                                  self->sim.stepLr);
 
     self->sim.num_time_steps = num_time_steps;
-    self->sim.stepT = time_step;
+    self->sim.time_step = time_step;
 
     return 0;
 }
@@ -541,9 +541,9 @@ pypmc_get_fluence_box( PyPMC *self, void *closure )
     PyObject *dim_x, *dim_y, *dim_z;
     PyObject *dimensions;
 
-    dim_x = Py_BuildValue("(ii)", self->sim.grid.Imin.x, self->sim.grid.Imax.x);
-    dim_y = Py_BuildValue("(ii)", self->sim.grid.Imin.y, self->sim.grid.Imax.y);
-    dim_z = Py_BuildValue("(ii)", self->sim.grid.Imin.z, self->sim.grid.Imax.z);
+    dim_x = Py_BuildValue("(ii)", self->sim.grid.fbox_min.x, self->sim.grid.fbox_max.x);
+    dim_y = Py_BuildValue("(ii)", self->sim.grid.fbox_min.y, self->sim.grid.fbox_max.y);
+    dim_z = Py_BuildValue("(ii)", self->sim.grid.fbox_min.z, self->sim.grid.fbox_max.z);
 
     dimensions = Py_BuildValue("(NNN)", dim_x, dim_y, dim_z);
 
@@ -563,7 +563,7 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
         {
             for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
             {
-                if( bitset_get(sim.detHit, photonIndex, detIndex) == 1 )
+                if( bitset_get(sim.det_hit, photonIndex, detIndex) == 1 )
                 {
                     for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
                     {
@@ -636,7 +636,7 @@ static PyMemberDef pypmc_members[] = {
     // Simulation results
     {"fluence", T_OBJECT_EX, offsetof(PyPMC, py_fluence), READONLY,
      "fluence"},
-    {"pathlength", T_OBJECT_EX, offsetof(PyPMC, py_pathlength), READONLY,
+    {"path_length", T_OBJECT_EX, offsetof(PyPMC, py_path_length), READONLY,
      "the distance travelled by each photon in each type of tissue"},
     {"momentum_transfer", T_OBJECT_EX, offsetof(PyPMC, py_momentum_transfer), READONLY,
      "momentum transfer"},

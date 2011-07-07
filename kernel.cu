@@ -20,13 +20,13 @@
         (p).y = (r).y * (stepr).y; \
         (p).z = (r).z * (stepr).z
 
-//__constant__ int4 detLoc[MAX_DETECTORS];
-//__constant__ float4 tissueProp[MAX_TISSUES];
+//__constant__ int4 det_loc[MAX_DETECTORS];
+//__constant__ float4 media_prop[MAX_TISSUES];
 __constant__ Simulation s;
 __constant__ GPUMemory g;
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(float *t, float gg, uint8_t tissueIndex, uint32_t photonIndex, float3 *d)
+__device__ void henyey_greenstein(float *t, float gg, uint8_t media_index, uint32_t photon_idx, float3 *d)
 {
     float3 d0;
     float rand;
@@ -54,7 +54,7 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t tissueIndex, uint3
     }
 
     if(theta > 0)
-        g.momTiss[MAD_HASH((photonIndex << 5) | tissueIndex)] += 1 - ctheta;
+        g.mom_transfer[MAD_HASH((photon_idx << 5) | media_index)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -72,15 +72,15 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t tissueIndex, uint3
 
 __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int iteration)
 {
-    __shared__ int4 detLoc[MAX_DETECTORS + MAX_TISSUES];
-    float4 *tissueProp = (float4 *) detLoc + MAX_DETECTORS;
+    __shared__ int4 det_loc[MAX_DETECTORS + MAX_TISSUES];
+    float4 *media_prop = (float4 *) det_loc + MAX_DETECTORS;
 
     // Loop index
     int i;
 
     uint32_t threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
-    uint8_t tissueIndex;   // tissue type of the current voxel
+    uint8_t media_index;   // tissue type of the current voxel
     int time;            // time elapsed since the photon was launched
     float step;
     float musr;
@@ -88,9 +88,9 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     // Random number generation
     float t[RAND_BUF_LEN], tnew[RAND_BUF_LEN];
 
-    detLoc[threadIdx.x] = g.detLoc[threadIdx.x];
-    detLoc[2*threadIdx.x] = g.detLoc[2*threadIdx.x];
-    tissueProp[threadIdx.x] = g.tissueProp[threadIdx.x];
+    det_loc[threadIdx.x] = g.det_loc[threadIdx.x];
+    det_loc[2*threadIdx.x] = g.det_loc[2*threadIdx.x];
+    media_prop[threadIdx.x] = g.media_prop[threadIdx.x];
     __syncthreads();
 
     gpu_rng_init(t, tnew, seed, threadIndex);
@@ -98,11 +98,11 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     int photons_run = 0;
     while(photons_run < photons_per_thread)
     {
-        uint32_t photonIndex = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
+        uint32_t photon_idx = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
         photons_run++;
 
         // Set the photon weight to 1 and initialize photon length parameters
-        float P2pt = 1.0;   // photon weight
+        float photon_weight = 1.0;   // photon weight
         float dist = 0.0;   // distance traveled so far by the photon 
         float Lnext = s.grid.minstepsize;
         float Lresid = 0.0;
@@ -125,7 +125,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                p.x >= 0 && p.x < s.grid.dim.x &&
                p.y >= 0 && p.y < s.grid.dim.y &&
                p.z >= 0 && p.z < s.grid.dim.z &&
-               (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
+               (media_index = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
         {
             rand_need_more(t, tnew);
 
@@ -136,22 +136,22 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                    p.x >= 0 && p.x < s.grid.dim.x &&
                    p.y >= 0 && p.y < s.grid.dim.y &&
                    p.z >= 0 && p.z < s.grid.dim.z &&
-                   (tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
+                   (media_index = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)]) != 0 )
             {
                 if(dist > Lnext && dist > s.min_length)
                 {
                     time = (int) ((dist - s.min_length) * s.stepLr);
 
-                    if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
-                        p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
-                        p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
+                    if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
+                        p.y >= s.grid.fbox_min.y && p.y <= s.grid.fbox_max.y &&
+                        p.z >= s.grid.fbox_min.z && p.z <= s.grid.fbox_max.z &&
                         time < s.num_time_steps )
-                        g.II[LIN(p.x, p.y, p.z, time, s.grid)] += P2pt;
+                        g.fbox[LIN(p.x, p.y, p.z, time, s.grid)] += photon_weight;
 
                     Lnext += s.grid.minstepsize;
                 }
 
-                musr = tissueProp[tissueIndex].x;
+                musr = media_prop[media_index].x;
                 step = Lresid * musr;
                 // If scattering length is likely within a voxel, jump inside one voxel
                 if(s.grid.minstepsize > step) {
@@ -166,18 +166,18 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 r.z += d.z * step;
                 dist += step;
 
-                P2pt *= expf(-(tissueProp[tissueIndex].y) * step);
+                photon_weight *= expf(-(media_prop[media_index].y) * step);
                 // FIXME: on 32-bits cards, this only works with up to
                 //        (2^5 - 1) tissue types (indexed from 1) and
                 //        2^27 photons (indexed from 0).
-                g.lenTiss[MAD_HASH((photonIndex << 5) | tissueIndex)] += step;
+                g.path_length[MAD_HASH((photon_idx << 5) | media_index)] += step;
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon
 
             // Calculate the new scattering angle using henyey-greenstein
-            if(tissueIndex != 0)
-                henyey_greenstein(t, tissueProp[tissueIndex].z, tissueIndex, photonIndex, &d);
+            if(media_index != 0)
+                henyey_greenstein(t, media_prop[media_index].z, media_index, photon_idx, &d);
         } // loop until end of single photon
 
         // Score exiting photon
@@ -187,23 +187,22 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
              p.y >= 0 && p.y < s.grid.dim.y &&
              p.z >= 0 && p.z < s.grid.dim.z )
         {
-            tissueIndex = g.tissueType[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
-            if(tissueIndex == 0)
+            media_index = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
+            if(media_index == 0)
             {
                 time = (int) ((dist - s.min_length) * s.stepLr);
-                if( p.x >= s.grid.Imin.x && p.x <= s.grid.Imax.x &&
-                    p.y >= s.grid.Imin.y && p.y <= s.grid.Imax.y &&
-                    p.z >= s.grid.Imin.z && p.z <= s.grid.Imax.z &&
+                if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
+                    p.y >= s.grid.fbox_min.y && p.y <= s.grid.fbox_max.y &&
+                    p.z >= s.grid.fbox_min.z && p.z <= s.grid.fbox_max.z &&
                     time < s.num_time_steps )
-                    g.II[LIN(p.x, p.y, p.z, time, s.grid)] -= P2pt;
+                    g.fbox[LIN(p.x, p.y, p.z, time, s.grid)] -= photon_weight;
 
-                // Loop through number of detectors
                 // Did the photon hit a detector?
                 for( i = 0; i < s.det.num; i++ )
-                    if( absf(p.x - detLoc[i].x) <= detLoc[i].w &&
-                        absf(p.y - detLoc[i].y) <= detLoc[i].w &&
-                        absf(p.z - detLoc[i].z) <= detLoc[i].w )
-                        gpu_set(g.detHit, photonIndex, i);
+                    if( absf(p.x - det_loc[i].x) <= det_loc[i].w &&
+                        absf(p.y - det_loc[i].y) <= det_loc[i].w &&
+                        absf(p.z - det_loc[i].z) <= det_loc[i].w )
+                        gpu_set(g.det_hit, photon_idx, i);
             }
         }
     }
@@ -212,7 +211,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
 // Make sure the source is at an interface.
 void correct_source(Simulation *sim)
 {
-    uint8_t tissueIndex;
+    uint8_t media_index;
     int3 p;
     float3 r0;
 
@@ -221,9 +220,9 @@ void correct_source(Simulation *sim)
 
     MOVE(p, r0, sim->grid.stepr);
 
-    tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
+    media_index = sim->grid.media_type[p.x][p.y][p.z];
 
-    while( tissueIndex != 0 &&
+    while( media_index != 0 &&
            p.x > 0 && p.x < sim->grid.dim.x &&
            p.y > 0 && p.y < sim->grid.dim.y &&
            p.z > 0 && p.z < sim->grid.dim.z )
@@ -232,9 +231,9 @@ void correct_source(Simulation *sim)
         r0.y -= sim->src.d.y * sim->grid.minstepsize;
         r0.z -= sim->src.d.z * sim->grid.minstepsize;
         MOVE(p, r0, sim->grid.stepr);
-        tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
+        media_index = sim->grid.media_type[p.x][p.y][p.z];
     }
-    while( tissueIndex == 0 &&
+    while( media_index == 0 &&
            p.x > 0 && p.x < sim->grid.dim.x &&
            p.y > 0 && p.y < sim->grid.dim.y &&
            p.z > 0 && p.z < sim->grid.dim.z )
@@ -243,7 +242,7 @@ void correct_source(Simulation *sim)
         r0.y += sim->src.d.y * sim->grid.minstepsize;
         r0.z += sim->src.d.z * sim->grid.minstepsize;
         MOVE(p, r0, sim->grid.stepr);
-        tissueIndex = sim->grid.tissueType[p.x][p.y][p.z];
+        media_index = sim->grid.media_type[p.x][p.y][p.z];
     }
 
     // Update the source coordinates 

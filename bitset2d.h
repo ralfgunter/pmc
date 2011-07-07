@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define BITS_PER_UINT (sizeof(uint32_t) * 8)
+#define BITS_PER_CHAR (sizeof(uint32_t) * 8)
 
-#define MATRIX_IDX(x,y,num_y) ((y / BITS_PER_UINT) + (x * num_y))
-#define UINT_IDX(y)            (y % BITS_PER_UINT)
+#define MATRIX_IDX(x,y,num_y) ((y / BITS_PER_CHAR) + (x * num_y))
+#define UINT_IDX(y)            (y % BITS_PER_CHAR)
 
 typedef struct {
     uint32_t *matrix;

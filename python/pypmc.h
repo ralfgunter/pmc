@@ -20,7 +20,7 @@
 typedef struct {
     PyObject_HEAD
 
-    PyObject *py_pathlength, *py_momentum_transfer;
+    PyObject *py_path_length, *py_momentum_transfer;
     PyObject *py_medium;
     PyArrayObject *py_fluence;
 
@@ -30,6 +30,6 @@ typedef struct {
 } PyPMC;
 
 static PyObject* pypmc_get_tissueArray( Simulation sim, float *tissueArray );
-static PyArrayObject* pypmc_fluence_to_ndarray( Simulation sim, float *II );
+static PyArrayObject* pypmc_fluence_to_ndarray( Simulation sim, float *fbox );
 
 #endif  // _PYPMC_H_

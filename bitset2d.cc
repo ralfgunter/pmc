@@ -6,7 +6,7 @@
 Bitset2D bitset_new(uint32_t dim_x, uint32_t dim_y)
 {
     Bitset2D b;
-    uint32_t num_y = (dim_y + BITS_PER_UINT - 1) / BITS_PER_UINT;
+    uint32_t num_y = (dim_y + BITS_PER_CHAR - 1) / BITS_PER_CHAR;
     uint32_t num_elements = dim_x * num_y;
     uint32_t *matrix = (uint32_t *) calloc(num_elements, sizeof(uint32_t));
 
