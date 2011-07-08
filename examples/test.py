@@ -1,18 +1,19 @@
 import pypmc
+import numpy
 
-max_time = 1e-10
-step     = 0.1e-10
+max_time = 5e-10
+step     = 1e-10
 num_steps = int(max_time / step)
 
 obj = pypmc.PyPMC()
 
 obj.n_threads = 4096 
-obj.n_iterations = 2
+obj.n_iterations = 1
 obj.rand_seed = 32898232
 
-obj.n_photons = 2**21
+obj.n_photons = 2**20
 
-obj.detectors = [(73, 33, 8, 1)]
+obj.detectors = [(74, 34, 9, 1)]
 
 obj.tissues = [(1.1, 0.01, 0.05, 1.0)]
 
@@ -28,10 +29,24 @@ obj.src_dir = (0.0, 0.0, 1.0)
 
 obj.src_pos = (12.5, 3.5, 1.0)
 
-obj.run_simulation()
 
+# First run
+obj.run_simulation()
 obj.pull_results()
 
-print("Fluence results:")
+
+print(obj.fluence.flags)
+f = numpy.asfortranarray.(obj.fluence).copy()
+
+
+# Second run
+obj.n_photons = 2**21
+obj.run_simulation()
+obj.pull_results()
+
+
+# Compare fluence from each run
 for i in range(num_steps):
-    print("t" + repr(i) + " = " + repr(obj.fluence[73][33][12][i]))
+    print(f[74][34][13][i])
+    print(obj.fluence[74][34][13][i])
+
