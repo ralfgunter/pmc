@@ -579,11 +579,16 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
     return py_tissueArray;
 }
 
-// FIXME: stub getter
 static PyObject*
 pypmc_get_time_params( PyPMC *self, void *closure )
 {
-    Py_RETURN_NONE;
+    double min_time, max_time, time_step;
+
+    min_time  = self->sim.min_length * self->sim.tiss.prop[1].w / C_VACUUM;
+    max_time  = self->sim.max_length * self->sim.tiss.prop[1].w / C_VACUUM;
+    time_step = self->sim.time_step;
+
+    return Py_BuildValue("(fff)", min_time, max_time, time_step);
 }
 
 //// end of getters and setters
