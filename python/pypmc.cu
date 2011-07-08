@@ -95,6 +95,10 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
 
+    Py_XDECREF(self->py_path_length);
+    Py_XDECREF(self->py_momentum_transfer);
+    Py_XDECREF(self->py_fluence);
+
     self->py_path_length = pypmc_get_tissueArray(self->sim, self->sim.path_length);
     self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.mom_transfer);
     self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.fbox);
