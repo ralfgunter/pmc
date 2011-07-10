@@ -148,9 +148,9 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     for( i = 0; i < num_dets; i++ )
     {
         fscanf( fp, "%lf %lf %lf", &det_x, &det_y, &det_z);
-        det[i].x = (int) (det_x / vox_dim.x) - 1;
-        det[i].y = (int) (det_y / vox_dim.y) - 1;
-        det[i].z = (int) (det_z / vox_dim.z) - 1;
+        det[i].x = (int) (det_x / vox_dim.x);
+        det[i].y = (int) (det_y / vox_dim.y);
+        det[i].z = (int) (det_z / vox_dim.z);
         det[i].w = (int) radius;
     }
 
@@ -219,7 +219,7 @@ int write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *dyn;//*momentum, *path_length;
     char filename[128];
-    int tissueIndex, detIndex;
+    uint32_t tissueIndex, detIndex;
     uint32_t k, photonIndex;
 
     // TODO: check for errors
