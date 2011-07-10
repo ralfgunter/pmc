@@ -24,7 +24,8 @@ typedef struct {
     PyObject_HEAD
 
     int gpu_id;
-    CUcontext ctx;	// TODO: get rid of this. GET RID OF THIS.
+    CUcontext ctx;	    // TODO: get rid of this. GET RID OF THIS.
+    CUTThread thread;   // TODO: see above.
 
     PyObject *py_path_length, *py_momentum_transfer;
     PyObject *py_medium;
