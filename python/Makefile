@@ -48,10 +48,13 @@ CUDA_LINK += -m64
 endif
 
 pypmc.o: pypmc.cu
-	nvcc $(NVCC_FLAGS) -c pypmc.cu -o pypmc.o
+	nvcc $(NVCC_FLAGS) -c $<
 
-pypmc.so: pypmc.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/bitset2d.o
-	g++ $(LINK_FLAGS) pypmc.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/bitset2d.o -o $@
+multithreading.o: multithreading.cpp multithreading.h
+	g++ -fPIC -c $<
+
+pypmc.so: pypmc.o multithreading.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/bitset2d.o
+	g++ $(LINK_FLAGS) pypmc.o multithreading.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/bitset2d.o -o $@
 
 clean:
-	rm -f pypmc.o pypmc.so
+	rm -f pypmc.o pypmc.so multithreading.o

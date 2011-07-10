@@ -31,17 +31,17 @@ obj.src_pos = (12.5, 3.5, 1.0)
 
 
 # First run
-obj.run_simulation()
+print("Running the first simulation")
+obj.run_simulation(0)
 obj.pull_results()
 
-
-print(obj.fluence.flags)
+#print(obj.fluence.flags)
 f = numpy.asfortranarray(obj.fluence).copy()
 
-
 # Second run
+print("Running the second simulation")
 obj.n_photons = 2**21
-obj.run_simulation()
+obj.run_simulation(0)
 obj.pull_results()
 
 

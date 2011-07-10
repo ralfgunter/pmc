@@ -6,6 +6,7 @@
 #include "main.h"
 #define PY_ARRAY_UNIQUE_SYMBOL cool_ARRAY_API
 #include <numpy/arrayobject.h>
+#include "multithreading.h"
 
 #if PYTHON == 2
 #undef PyLong_Check
@@ -19,6 +20,8 @@
 
 typedef struct {
     PyObject_HEAD
+
+    int gpu_id;
 
     PyObject *py_path_length, *py_momentum_transfer;
     PyObject *py_medium;
