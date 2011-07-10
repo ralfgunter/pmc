@@ -2,8 +2,8 @@ OS = $(shell uname -s)
 ARCH = $(shell uname -m)
 
 # Default is to compile against python 3.x
-all: python2
-PY_VERSION = 2
+all: python3
+PY_VERSION = 3
 
 # Python 3.2
 P3_NUMPY_INC = -I$(shell python3.2 -c "import numpy; print(numpy.get_include())") 

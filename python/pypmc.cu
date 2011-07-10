@@ -126,6 +126,8 @@ static CUT_THREADPROC pull_results(void *self_void)
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
 
+    cuCtxPopCurrent(&self->ctx);
+
     CUT_THREADEND;
 }
 
