@@ -44,6 +44,15 @@
 #define MIN(a,b) ((a) < (b) ? (a) :  (b))
 #define absf(x)  ((x) >  0  ? (x) : -(x))
 
+#define safeCall(err) __cudaSafeCall(err, __FILE__, __LINE__)
+static void __cudaSafeCall(cudaError_t err, const char *file, int line)
+{
+    if(cudaSuccess != err) {
+    printf("cuda error, %s at %d: %s\n", file, line, cudaGetErrorString(err));
+        exit(-1);
+    }
+}
+
 #define TO_DEVICE(d_ptr, h_ptr, size) (cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyHostToDevice))
 #define TO_HOST(d_ptr, h_ptr, size)   (cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyDeviceToHost))
 

@@ -8,6 +8,8 @@
 #include <numpy/arrayobject.h>
 #include "multithreading.h"
 
+#include "cuda.h"
+
 #if PYTHON == 2
 #undef PyLong_Check
 #undef PyLong_AsLong 
@@ -22,6 +24,7 @@ typedef struct {
     PyObject_HEAD
 
     int gpu_id;
+    CUcontext ctx;	// TODO: get rid of this. GET RID OF THIS.
 
     PyObject *py_path_length, *py_momentum_transfer;
     PyObject *py_medium;

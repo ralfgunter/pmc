@@ -2,8 +2,8 @@ OS = $(shell uname -s)
 ARCH = $(shell uname -m)
 
 # Default is to compile against python 3.x
-all: python3
-PY_VERSION = 3
+all: python2
+PY_VERSION = 2
 
 # Python 3.2
 P3_NUMPY_INC = -I$(shell python3.2 -c "import numpy; print(numpy.get_include())") 
@@ -39,7 +39,7 @@ CUDA_ARCH = 64
 endif
 
 NVCC_FLAGS = -g -DNDEBUG -Xcompiler -pthread -Xcompiler -fno-strict-aliasing -Xcompiler -fwrapv -Xcompiler -O2 -Xcompiler -Wall -Xcompiler -fPIC -I.. $(PY_INCS) -DPYTHON=$(PY_VERSION)
-CUDA_LINK += -L/usr/local/cuda/lib$(CUDA_ARCH) -lcudart
+CUDA_LINK += -L/usr/local/cuda/lib$(CUDA_ARCH) -lcudart -lcuda
 LINK_FLAGS = -shared $(CUDA_LINK) $(PY_LINK)
 ifeq ($(OS), Darwin)
 LINK_FLAGS += -m64
