@@ -86,14 +86,8 @@ static CUT_THREADPROC run_sim( void *self_void )
     free_cpu_results_mem(self->sim);
     init_mem(self->conf, &self->sim, &self->gmem);
 
-    // Release the GIL, since we're about to begin a new, time-consuming simulation
-    Py_BEGIN_ALLOW_THREADS
-
     // Run simulations on the GPU.
     simulate(self->conf, self->sim, self->gmem);
-
-    // Reacquire the GIL, as we're done.
-    Py_END_ALLOW_THREADS
 
     cuCtxPopCurrent(&self->ctx);
 
@@ -106,10 +100,16 @@ pypmc_run( PyPMC *self, PyObject *args )
     if (! PyArg_ParseTuple(args, "i", &self->gpu_id))
         return NULL;
 
+    // Release the GIL, since we're about to begin a new, time-consuming simulation
+    Py_BEGIN_ALLOW_THREADS
+
     // Spawn a new thread to handle this simulation
     // While this might be a bit counterintuitive in the case only a single GPU
     // is installed, it simplifies things a lot otherwise.
     self->thread = cutStartThread((CUT_THREADROUTINE) run_sim, (void *) self);
+
+    // Reacquire the GIL, as we're done.
+    Py_END_ALLOW_THREADS
 
     Py_RETURN_NONE;
 }
