@@ -217,7 +217,7 @@ int write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *dyn;//*momentum, *path_length;
     char filename[128];
-    int tissueIndex, detIndex, photonIndex;
+    int media_idx, det_idx, photon_idx;
     uint32_t k;
 
     // TODO: check for errors
@@ -230,15 +230,15 @@ int write_results(Simulation sim, const char *input_filename)
 
     if( sim.det.num != 0 )
     {
-        for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
+        for( photon_idx = 0; photon_idx < sim.n_photons; photon_idx++ )
         {
-            if( (detIndex = sim.det.hit[photonIndex]) != -1 )
+            if( (det_idx = sim.det.hit[photon_idx]) != -1 )
             {
                 // Write to the history file
-                fwrite(&detIndex, sizeof(int), 1, history);
-                for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
+                fwrite(&det_idx, sizeof(int), 1, history);
+                for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
-                    k = MAD_HASH((photonIndex << 5) | tissueIndex);
+                    k = MAD_HASH((photon_idx << 5) | media_idx);
 
                     fwrite(&sim.path_length[k], sizeof(float), 1, history);
                     fprintf(dyn, "%f %f\n", sim.path_length[k], sim.mom_transfer[k]);

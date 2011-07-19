@@ -557,25 +557,28 @@ pypmc_get_fluence_box( PyPMC *self, void *closure )
 static PyObject*
 pypmc_get_tissueArray( Simulation sim, float *tissueArray )
 {
-    uint32_t photon_idx, k;
     int det_idx, media_idx;
+    uint32_t photon_idx, k;
     PyObject *py_tissueArray = Py_BuildValue("[]");
 
     if( sim.det.num != 0 )
     {
         for( photon_idx = 0; photon_idx < sim.n_photons; photon_idx++ )
         {
-            for( det_idx = 0; det_idx < sim.det.num; det_idx++ )
+            if( (det_idx = sim.det.hit[photon_idx]) != -1 )
             {
-                if( bitset_get(sim.det.hit, photon_idx, det_idx) == 1 )
-                {
-                    for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
-                    {
-                        k = MAD_HASH((photon_idx << 5) | media_idx);
+                // For each photon detected, store an array with its history and
+                // the detector's number.
+                PyObject *photon_history = Py_BuildValue("[i]", det_idx);
 
-                        PyList_Append(py_tissueArray, PyFloat_FromDouble(tissueArray[k]));
-                    }
+                for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
+                {
+                    k = MAD_HASH((photon_idx << 5) | media_idx);
+
+                    PyList_Append(photon_history, PyFloat_FromDouble(tissueArray[k]));
                 }
+
+                PyList_Append(py_tissueArray, photon_history);
             }
         }
     }
