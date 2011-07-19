@@ -13,7 +13,6 @@
 
 #include "main.h"
 #include "logistic_rand_kernel.h"
-#include "bitset2d_kernel.h"
 
 #define MOVE(p, r, stepr) \
         (p).x = (r).x * (stepr).x; \
@@ -202,7 +201,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                     if( absf(p.x - det_loc[i].x) <= det_loc[i].w &&
                         absf(p.y - det_loc[i].y) <= det_loc[i].w &&
                         absf(p.z - det_loc[i].z) <= det_loc[i].w )
-                        gpu_set(g.det_hit, photon_idx, i);
+                        g.det_hit[photon_idx] = i;
             }
         }
     }
@@ -259,8 +258,8 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     int photons_per_thread = photons_per_iteration / conf.n_threads;
     int iteration = 0;
 
-    printf("photons per thread = %d\n", photons_per_thread);
-    printf("photons per iteration = %d\n", photons_per_iteration);
+    //printf("photons per thread = %d\n", photons_per_thread);
+    //printf("photons per iteration = %d\n", photons_per_iteration);
 
     seed = conf.rand_seed;
     d_seed = gmem.seed;

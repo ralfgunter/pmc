@@ -25,8 +25,6 @@
 #include <string.h>
 #include <time.h>
 
-#include "bitset2d.h"
-
 #define PI 3.1415926535897932
 #define C_VACUUM 2.9979e11
 #define FP_DIV_ERR 1e-8
@@ -82,7 +80,7 @@ typedef struct {
 typedef struct {
     int num;    // specify number of detectors
     int4 *info; // grid coordinates and and radius
-    Bitset2D hit;   // detectors hit by nearby photons
+    int *hit;
 } Detectors;
 
 typedef struct {
@@ -123,8 +121,8 @@ typedef struct {
     // Photon fluence
     float *fbox;
 
-    // Bitset of detectors hit by a given photon packet.
-    Bitset2D det_hit;
+    // Detector hit by a given photon.
+    int *det_hit;
 
     // Seed for the random number generator.
     uint32_t *seed;
