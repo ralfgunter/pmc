@@ -201,7 +201,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                     if( absf(p.x - det_loc[i].x) <= det_loc[i].w &&
                         absf(p.y - det_loc[i].y) <= det_loc[i].w &&
                         absf(p.z - det_loc[i].z) <= det_loc[i].w )
-                        g.det_hit[photon_idx] = i;
+                        g.det_hit[photon_idx] = i + 1;
             }
         }
     }

@@ -80,7 +80,7 @@ typedef struct {
 typedef struct {
     int num;    // specify number of detectors
     int4 *info; // grid coordinates and and radius
-    int *hit;
+    int8_t *hit;
 } Detectors;
 
 typedef struct {
@@ -122,7 +122,7 @@ typedef struct {
     float *fbox;
 
     // Detector hit by a given photon.
-    int *det_hit;
+    int8_t *det_hit;
 
     // Seed for the random number generator.
     uint32_t *seed;

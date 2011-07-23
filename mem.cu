@@ -51,7 +51,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     float *d_fbox;
     float *d_path_length, *d_mom_transfer;
     uint8_t *h_linear_media_type, *d_media_type;
-    int *d_det_hit;
+    int8_t *d_det_hit;
     uint32_t *d_seed;
     int4 *d_det_loc;
     float4 *d_media_prop;
@@ -75,20 +75,28 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     num_fbox = sim->grid.nIxyz * sim->num_time_steps;
     sim->fbox = (float *) calloc(num_fbox, sizeof(float));
 
-    sim->det.hit = (int *) malloc(sim->n_photons * sizeof(int));
-    for(int i = 0; i < sim->n_photons; ++i) sim->det.hit[i] = -1; // why not use memset?
+    // Array of which photons hit which detectors (if any).
+    sim->det.hit = (int8_t *) calloc(sim->n_photons, sizeof(int8_t));
 
+    // Array of seeds for the GPU random number generator.
     d_seed = init_rand_seed(conf.rand_seed, conf);
 
     // Allocate memory on the GPU global memory.
-    // TODO: use constant memory where appropriate 
     cudaMalloc((void **) &d_det_loc, MAX_DETECTORS * sizeof(int4));
     cudaMalloc((void **) &d_media_prop, (MAX_TISSUES + 1) * sizeof(float4));
     cudaMalloc((void **) &d_media_type, grid_dim * sizeof(uint8_t));
     cudaMalloc((void **) &d_path_length,  num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_mom_transfer, num_tissueArrays * sizeof(float));
     cudaMalloc((void **) &d_fbox,         num_fbox         * sizeof(float));
-    cudaMalloc((void **) &d_det_hit, sim->n_photons * sizeof(uint32_t));
+    cudaMalloc((void **) &d_det_hit, sim->n_photons * sizeof(int8_t));
+
+    printf("det_loc: %ld\n", MAX_DETECTORS * sizeof(int4));
+    printf("media_prop: %ld\n", (MAX_TISSUES + 1) * sizeof(float4));
+    printf("media_type: %ld\n", grid_dim * sizeof(uint8_t));
+    printf("path_length: %ld\n",  num_tissueArrays * sizeof(float));
+    printf("mom_transfer: %ld\n", num_tissueArrays * sizeof(float));
+    printf("fbox: %ld\n",         num_fbox         * sizeof(float));
+    printf("det_hit: %ld\n", sim->n_photons * sizeof(int8_t));
 
     int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
                       + sizeof(float4) * (MAX_TISSUES + 1)
@@ -96,7 +104,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_fbox
-                      + sizeof(uint32_t) * sim->n_photons
+                      + sizeof(int8_t) * sim->n_photons
                       + sizeof(uint32_t) * conf.n_threads * RAND_SEED_LEN;
     printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
 
@@ -110,7 +118,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     TO_DEVICE(d_path_length, sim->path_length, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_mom_transfer, sim->mom_transfer, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_fbox,      sim->fbox,      num_fbox           * sizeof(float));
-    TO_DEVICE(d_det_hit, sim->det.hit, sim->n_photons * sizeof(uint32_t));
+    TO_DEVICE(d_det_hit, sim->det.hit, sim->n_photons * sizeof(int8_t));
 
     // Update GPU memory structure (so that its pointers can be used elsewhere).
     gmem->det_loc = d_det_loc;
@@ -195,7 +203,7 @@ void retrieve(Simulation *sim, GPUMemory *gmem)
     //size_t sizeof_tissueArrays = sim->n_photons * (sim->tiss.num + 1) * sizeof(float);
     size_t sizeof_tissueArrays = (1 << NUM_HASH_BITS) * sizeof(float);
     size_t sizeof_fbox = sim->grid.nIxyz * sim->num_time_steps * sizeof(float);
-    size_t sizeof_det_hit = sim->n_photons * sizeof(uint32_t);
+    size_t sizeof_det_hit = sim->n_photons * sizeof(int8_t);
 
     TO_HOST(sim->path_length, gmem->path_length, sizeof_tissueArrays);
     TO_HOST(sim->mom_transfer, gmem->mom_transfer, sizeof_tissueArrays);
