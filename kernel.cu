@@ -166,9 +166,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 dist += step;
 
                 photon_weight *= expf(-(media_prop[media_idx].y) * step);
-                // FIXME: on 32-bits cards, this only works with up to
-                //        (2^5 - 1) tissue types (indexed from 1) and
-                //        2^27 photons (indexed from 0).
+
                 g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
 
                 MOVE(p, r, s.grid.stepr);

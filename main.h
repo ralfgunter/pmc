@@ -54,8 +54,13 @@
 // - SPWorley at http://forums.nvidia.com/index.php?showtopic=189165
 // multiply-add code from wikipedia
 #define NUM_HASH_BITS 25
+#if (__x86_64 == 1) // TODO: find out if there is a better way
+#define MAD_HASH(key) ((uint64_t) (0x27253271b2cb5ad6 * (key)) >> (64 - NUM_HASH_BITS + 1))
+#define MAD_IDX(x, y) MAD_HASH((x << 8) | y)
+#else
 #define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
 #define MAD_IDX(x, y) MAD_HASH((x << 5) | y)
+#endif
 
 typedef struct {
     uint8_t ***media_type; // type of the tissue within the voxel
