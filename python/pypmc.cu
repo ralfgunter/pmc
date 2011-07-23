@@ -574,7 +574,7 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
 
                 for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
-                    k = MAD_HASH((photon_idx << 5) | media_idx);
+                    k = MAD_IDX(photon_idx, media_idx);
 
                     PyList_Append(photon_history, PyFloat_FromDouble(tissueArray[k]));
                 }

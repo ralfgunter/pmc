@@ -90,14 +90,6 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     cudaMalloc((void **) &d_fbox,         num_fbox         * sizeof(float));
     cudaMalloc((void **) &d_det_hit, sim->n_photons * sizeof(int8_t));
 
-    printf("det_loc: %ld\n", MAX_DETECTORS * sizeof(int4));
-    printf("media_prop: %ld\n", (MAX_TISSUES + 1) * sizeof(float4));
-    printf("media_type: %ld\n", grid_dim * sizeof(uint8_t));
-    printf("path_length: %ld\n",  num_tissueArrays * sizeof(float));
-    printf("mom_transfer: %ld\n", num_tissueArrays * sizeof(float));
-    printf("fbox: %ld\n",         num_fbox         * sizeof(float));
-    printf("det_hit: %ld\n", sim->n_photons * sizeof(int8_t));
-
     int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
                       + sizeof(float4) * (MAX_TISSUES + 1)
                       + sizeof(uint8_t) * grid_dim

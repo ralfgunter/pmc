@@ -53,7 +53,7 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_
     }
 
     if(theta > 0)
-        g.mom_transfer[MAD_HASH((photon_idx << 5) | media_idx)] += 1 - ctheta;
+        g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -169,7 +169,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 // FIXME: on 32-bits cards, this only works with up to
                 //        (2^5 - 1) tissue types (indexed from 1) and
                 //        2^27 photons (indexed from 0).
-                g.path_length[MAD_HASH((photon_idx << 5) | media_idx)] += step;
+                g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon

@@ -239,7 +239,7 @@ int write_results(Simulation sim, const char *input_filename)
                 fwrite(&(--det_idx), sizeof(int), 1, history);
                 for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
-                    k = MAD_HASH((photon_idx << 5) | media_idx);
+                    k = MAD_IDX(photon_idx, media_idx);
 
                     fwrite(&sim.path_length[k], sizeof(float), 1, history);
                     fprintf(dyn, "%f %f\n", sim.path_length[k], sim.mom_transfer[k]);
