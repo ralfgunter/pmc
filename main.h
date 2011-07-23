@@ -25,8 +25,6 @@
 #include <string.h>
 #include <time.h>
 
-#include "bitset2d.h"
-
 #define PI 3.1415926535897932
 #define C_VACUUM 2.9979e11
 #define FP_DIV_ERR 1e-8
@@ -38,8 +36,6 @@
 
 #define MAX_DETECTORS 256
 #define MAX_TISSUES 128
-
-#define NUM_HASH_BITS 25
 
 #define MIN(a,b) ((a) < (b) ? (a) :  (b))
 #define absf(x)  ((x) >  0  ? (x) : -(x))
@@ -66,7 +62,14 @@ static void __cudaSafeCall(cudaError_t err, const char *file, int line)
 // Magic number is "any odd number with a decent mix of 0s and 1s in every byte"
 // - SPWorley at http://forums.nvidia.com/index.php?showtopic=189165
 // multiply-add code from wikipedia
+#define NUM_HASH_BITS 25
+#if (__x86_64 == 1) // TODO: find out if there is a better way
+#define MAD_HASH(key) ((uint64_t) (0x27253271b2cb5ad6 * (key)) >> (64 - NUM_HASH_BITS + 1))
+#define MAD_IDX(x, y) MAD_HASH((x << 8) | y)
+#else
 #define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
+#define MAD_IDX(x, y) MAD_HASH((x << 5) | y)
+#endif
 
 typedef struct {
     uint8_t ***media_type; // type of the tissue within the voxel
@@ -91,7 +94,7 @@ typedef struct {
 typedef struct {
     int num;    // specify number of detectors
     int4 *info; // grid coordinates and and radius
-    Bitset2D hit;   // detectors hit by nearby photons
+    int8_t *hit;
 } Detectors;
 
 typedef struct {
@@ -132,8 +135,8 @@ typedef struct {
     // Photon fluence
     float *fbox;
 
-    // Bitset of detectors hit by a given photon packet.
-    Bitset2D det_hit;
+    // Detector hit by a given photon.
+    int8_t *det_hit;
 
     // Seed for the random number generator.
     uint32_t *seed;

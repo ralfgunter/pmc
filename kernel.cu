@@ -13,7 +13,6 @@
 
 #include "main.h"
 #include "logistic_rand_kernel.h"
-#include "bitset2d_kernel.h"
 
 #define MOVE(p, r, stepr) \
         (p).x = (r).x * (stepr).x; \
@@ -54,7 +53,7 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_
     }
 
     if(theta > 0)
-        g.mom_transfer[MAD_HASH((photon_idx << 5) | media_idx)] += 1 - ctheta;
+        g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -167,10 +166,8 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 dist += step;
 
                 photon_weight *= expf(-(media_prop[media_idx].y) * step);
-                // FIXME: on 32-bits cards, this only works with up to
-                //        (2^5 - 1) tissue types (indexed from 1) and
-                //        2^27 photons (indexed from 0).
-                g.path_length[MAD_HASH((photon_idx << 5) | media_idx)] += step;
+
+                g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon
@@ -202,7 +199,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                     if( absf(p.x - det_loc[i].x) <= det_loc[i].w &&
                         absf(p.y - det_loc[i].y) <= det_loc[i].w &&
                         absf(p.z - det_loc[i].z) <= det_loc[i].w )
-                        gpu_set(g.det_hit, photon_idx, i);
+                        g.det_hit[photon_idx] = i + 1;
             }
         }
     }
@@ -259,8 +256,8 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     int photons_per_thread = photons_per_iteration / conf.n_threads;
     int iteration = 0;
 
-    printf("photons per thread = %d\n", photons_per_thread);
-    printf("photons per iteration = %d\n", photons_per_iteration);
+    //printf("photons per thread = %d\n", photons_per_thread);
+    //printf("photons per iteration = %d\n", photons_per_iteration);
 
     seed = conf.rand_seed;
     d_seed = gmem.seed;

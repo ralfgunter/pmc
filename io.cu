@@ -19,7 +19,7 @@ int read_segmentation_file(Simulation *sim, const char *filename)
     int i, j, k;
     uint8_t ***media_type;
 
-    printf( "Loading target medium volume from %s\n", filename );
+    //printf( "Loading target medium volume from %s\n", filename );
 
     // Read in the segmented data file
     fp = fopen( filename, "rb" );
@@ -123,7 +123,6 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     for( i = 1; i <= n_tissues; i++ )
     {
         float tmus;
-        // TODO: allow float = double as well
         fscanf( fp, "%f %f %f %f", &tmus, &media_prop[i].y, &media_prop[i].z, &media_prop[i].w );
         if( media_prop[i].w != 1.0 )
         {
@@ -148,9 +147,9 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     for( i = 0; i < num_dets; i++ )
     {
         fscanf( fp, "%lf %lf %lf", &det_x, &det_y, &det_z);
-        det[i].x = (int) (det_x / vox_dim.x) - 1;
-        det[i].y = (int) (det_y / vox_dim.y) - 1;
-        det[i].z = (int) (det_z / vox_dim.z) - 1;
+        det[i].x = (int) (det_x / vox_dim.x);
+        det[i].y = (int) (det_y / vox_dim.y);
+        det[i].z = (int) (det_z / vox_dim.z);
         det[i].w = (int) radius;
     }
 
@@ -214,13 +213,13 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     return 0;
 }
 
-// TODO: handle the remaining files to be written.
 int write_results(Simulation sim, const char *input_filename)
 {
     FILE *history, *fluence, *dyn;//*momentum, *path_length;
     char filename[128];
-    int tissueIndex, detIndex;
-    uint32_t k, photonIndex;
+    int8_t det_idx;
+    int media_idx;
+    uint32_t photon_idx, k;
 
     // TODO: check for errors
     sprintf( filename, "%s.his", input_filename );
@@ -232,24 +231,20 @@ int write_results(Simulation sim, const char *input_filename)
 
     if( sim.det.num != 0 )
     {
-        for( photonIndex = 0; photonIndex < sim.n_photons; photonIndex++ )
+        for( photon_idx = 0; photon_idx < sim.n_photons; photon_idx++ )
         {
-            // Loop through number of detectors
-            for( detIndex = 0; detIndex < sim.det.num; detIndex++ )
+            if( (det_idx = sim.det.hit[photon_idx]) != 0 )
             {
-                if( bitset_get(sim.det.hit, photonIndex, detIndex) == 1 )
+                // Write to the history file
+                fwrite(&(--det_idx), sizeof(int), 1, history);
+                for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
-                    // Write to the history file
-                    fwrite(&detIndex, sizeof(int), 1, history);
-                    for( tissueIndex = 1; tissueIndex <= sim.tiss.num; tissueIndex++ )
-                    {
-                        k = MAD_HASH((photonIndex << 5) | tissueIndex);
+                    k = MAD_IDX(photon_idx, media_idx);
 
-                        fwrite(&sim.path_length[k], sizeof(float), 1, history);
-                        fprintf(dyn, "%f %f\n", sim.path_length[k], sim.mom_transfer[k]);
-                        //fprintf(path_length, "%f\n", sim.path_length[k]);
-                        //fprintf(momentum,   "%f\n", sim.mom_transfer[k]);       
-                    }
+                    fwrite(&sim.path_length[k], sizeof(float), 1, history);
+                    fprintf(dyn, "%f %f\n", sim.path_length[k], sim.mom_transfer[k]);
+                    //fprintf(path_length, "%f\n", sim.path_length[k]);
+                    //fprintf(momentum,   "%f\n", sim.mom_transfer[k]);       
                 }
             }
         }
