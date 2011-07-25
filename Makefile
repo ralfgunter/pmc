@@ -29,6 +29,7 @@ debug: LINK_FLAGS += -g -G
 debug: pmc 
 
 opt: NVCC_FLAGS += -use_fast_math -arch=compute_11
+#opt: NVCC_FLAGS += -DNO_FLUENCE
 opt: pmc 
 
 python3: opt

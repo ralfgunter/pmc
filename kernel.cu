@@ -80,7 +80,9 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     uint32_t threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
     uint8_t media_idx;   // tissue type of the current voxel
+#ifndef NO_FLUENCE
     int time;            // time elapsed since the photon was launched
+#endif
     float step;
     float musr;
 
@@ -101,7 +103,9 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
         photons_run++;
 
         // Set the photon weight to 1 and initialize photon length parameters
+#ifndef NO_FLUENCE
         float photon_weight = 1.0;   // photon weight
+#endif
         float dist = 0.0;   // distance traveled so far by the photon 
         float Lnext = s.grid.minstepsize;
         float Lresid = 0.0;
@@ -139,13 +143,14 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
             {
                 if(dist > Lnext && dist > s.min_length)
                 {
+#ifndef NO_FLUENCE
                     time = (int) ((dist - s.min_length) * s.stepLr);
-
                     if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
                         p.y >= s.grid.fbox_min.y && p.y <= s.grid.fbox_max.y &&
                         p.z >= s.grid.fbox_min.z && p.z <= s.grid.fbox_max.z &&
                         time < s.num_time_steps )
                         g.fbox[LIN(p.x, p.y, p.z, time, s.grid)] += photon_weight;
+#endif
 
                     Lnext += s.grid.minstepsize;
                 }
@@ -165,7 +170,9 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 r.z += d.z * step;
                 dist += step;
 
+#ifndef NO_FLUENCE
                 photon_weight *= expf(-(media_prop[media_idx].y) * step);
+#endif
 
                 // This photon has moved a little bit more on this specific tissue.
                 g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
@@ -188,12 +195,14 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
             media_idx = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
             if(media_idx == 0)
             {
+#ifndef NO_FLUENCE
                 time = (int) ((dist - s.min_length) * s.stepLr);
                 if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
                     p.y >= s.grid.fbox_min.y && p.y <= s.grid.fbox_max.y &&
                     p.z >= s.grid.fbox_min.z && p.z <= s.grid.fbox_max.z &&
                     time < s.num_time_steps )
                     g.fbox[LIN(p.x, p.y, p.z, time, s.grid)] -= photon_weight;
+#endif
 
                 // Did the photon hit a detector?
                 for( i = 0; i < s.det.num; i++ )
