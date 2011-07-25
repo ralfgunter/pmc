@@ -7,12 +7,8 @@
 *               2008        Qianqian Fang (fangq <at> nmr.mgh.harvard.edu)      *
 *               2011        Ralf Gunter   (ralfgunter <at> gmail.com)           *
 *                                                                               *
-* License:  4-clause BSD License, see LICENSE for details                       *
+* License:  3-clause BSD License, see LICENSE for details                       *
 *                                                                               *
-* Example:                                                                      *
-*         tMCimg input.inp                                                      *
-*                                                                               *
-* Please find more details in README and doc/HELP                               *
 ********************************************************************************/
 
 #ifndef _MAIN_H_
@@ -40,8 +36,8 @@
 #define MIN(a,b) ((a) < (b) ? (a) :  (b))
 #define absf(x)  ((x) >  0  ? (x) : -(x))
 
-#define TO_DEVICE(d_ptr, h_ptr, size) (cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyHostToDevice))
-#define TO_HOST(d_ptr, h_ptr, size)   (cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyDeviceToHost))
+#define TO_DEVICE(d_ptr, h_ptr, size) cutilSafeCall(cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyHostToDevice))
+#define TO_HOST(d_ptr, h_ptr, size)   cutilSafeCall(cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyDeviceToHost))
 
 #define LIN2D(x,y,max_x) ((x) + (y) * (max_x))
 #define LIN3D(x,y,z,max_x,max_y) (LIN2D((x),(y),(max_x)) + (z) * ((max_x) * (max_y)))
@@ -53,7 +49,7 @@
 // Magic number is "any odd number with a decent mix of 0s and 1s in every byte"
 // - SPWorley at http://forums.nvidia.com/index.php?showtopic=189165
 // multiply-add code from wikipedia
-#define NUM_HASH_BITS 25
+#define NUM_HASH_BITS 24 // 64 MBs by default
 #if (__x86_64 == 1) // TODO: find out if there is a better way
 #define MAD_HASH(key) ((uint64_t) (0x27253271b2cb5ad6 * (key)) >> (64 - NUM_HASH_BITS + 1))
 #define MAD_IDX(x, y) MAD_HASH((x << 8) | y)
@@ -61,6 +57,18 @@
 #define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
 #define MAD_IDX(x, y) MAD_HASH((x << 5) | y)
 #endif
+
+// From the CUDA SDK
+// TODO: Perhaps this should be better off on util.cu?
+#define cutilSafeCall(err) __cudaSafeCall(err, __FILE__, __LINE__)
+inline void __cudaSafeCall( cudaError err, const char *file, const int line )
+{
+    if( cudaSuccess != err) {
+        fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s.\n",
+                file, line, (int)err, cudaGetErrorString( err ) );
+        exit(-1);
+    }
+}
 
 typedef struct {
     uint8_t ***media_type; // type of the tissue within the voxel
@@ -72,7 +80,6 @@ typedef struct {
     // a box outlined by the following coordinates.
     int3 fbox_min, fbox_max;
 
-    // TODO: find better names
     int3 fbox_dim;
     int nIxy, nIxyz;
 } Grid;
@@ -83,13 +90,13 @@ typedef struct {
 } Source;
 
 typedef struct {
-    int num;    // specify number of detectors
-    int4 *info; // grid coordinates and and radius
-    int8_t *hit;
+    int num;     // number of detectors
+    int4 *info;  // position (grid) and radius
+    int8_t *hit; // which detector, if any, a given photon hit 
 } Detectors;
 
 typedef struct {
-    int num;
+    int num;      // number of different tissue types
     float4 *prop; // Optical properties
 } Tissue;
 
@@ -140,21 +147,20 @@ typedef struct {
 } ExecConfig;
 
 // Function prototypes
-// TODO: Should we be consistent with the arguments, even though
-//       it's not necessary? Investigate.
-extern int read_input(ExecConfig *conf, Simulation *sim, const char *input_filename);
-extern int write_results(Simulation sim, const char *input_filename);
-extern int read_segmentation_file(Simulation *sim, const char *filename);
-extern void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
-extern void free_mem(Simulation sim, GPUMemory gmem); 
-extern void free_cpu_params_mem(Simulation sim); 
-extern void free_gpu_params_mem(GPUMemory gmem); 
-extern void free_cpu_results_mem(Simulation sim); 
-extern void free_gpu_results_mem(GPUMemory gmem); 
-extern void retrieve(Simulation *sim, GPUMemory *gmem);
-extern void correct_source(Simulation *sim);
-extern void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
-extern void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
-extern uint32_t* init_rand_seed(int seed, ExecConfig conf);
+int read_input(ExecConfig *conf, Simulation *sim, const char *input_filename);
+int write_results(Simulation sim, const char *input_filename);
+int read_segmentation_file(Simulation *sim, const char *filename);
+void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
+void free_mem(Simulation sim, GPUMemory gmem); 
+void free_cpu_params_mem(Simulation sim); 
+void free_gpu_params_mem(GPUMemory gmem); 
+void free_cpu_results_mem(Simulation sim); 
+void free_gpu_results_mem(GPUMemory gmem); 
+void retrieve(Simulation *sim, GPUMemory *gmem);
+void correct_source(Simulation *sim);
+void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
+void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
+uint32_t* init_rand_seed(int seed, ExecConfig conf);
+void linearize_3d(uint8_t ***t, uint8_t *l, int dim_x, int dim_y, int dim_z);
 
 #endif // _MAIN_H_

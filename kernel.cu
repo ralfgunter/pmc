@@ -7,7 +7,7 @@
 *               2008        Qianqian Fang (fangq <at> nmr.mgh.harvard.edu)      *
 *               2011        Ralf Gunter   (ralfgunter <at> gmail.com)           *
 *                                                                               *
-* License:  4-clause BSD License, see LICENSE for details                       *
+* License:  3-clause BSD License, see LICENSE for details                       *
 *                                                                               *
 ********************************************************************************/
 
@@ -167,6 +167,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
 
                 photon_weight *= expf(-(media_prop[media_idx].y) * step);
 
+                // This photon has moved a little bit more on this specific tissue.
                 g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
 
                 MOVE(p, r, s.grid.stepr);
@@ -256,8 +257,10 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     int photons_per_thread = photons_per_iteration / conf.n_threads;
     int iteration = 0;
 
-    //printf("photons per thread = %d\n", photons_per_thread);
-    //printf("photons per iteration = %d\n", photons_per_iteration);
+#ifdef DEBUG
+    printf("photons per thread = %d\n", photons_per_thread);
+    printf("photons per iteration = %d\n", photons_per_iteration);
+#endif
 
     seed = conf.rand_seed;
     d_seed = gmem.seed;

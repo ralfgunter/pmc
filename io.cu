@@ -7,7 +7,7 @@
 *               2008        Qianqian Fang (fangq <at> nmr.mgh.harvard.edu)      *
 *               2011        Ralf Gunter   (ralfgunter <at> gmail.com)           *
 *                                                                               *
-* License:  4-clause BSD License, see LICENSE for details                       *
+* License:  3-clause BSD License, see LICENSE for details                       *
 *                                                                               *
 ********************************************************************************/
 
@@ -19,9 +19,11 @@ int read_segmentation_file(Simulation *sim, const char *filename)
     int i, j, k;
     uint8_t ***media_type;
 
-    //printf( "Loading target medium volume from %s\n", filename );
+#ifdef DEBUG
+    printf( "Loading target medium volume from %s\n", filename );
+#endif
 
-    // Read in the segmented data file
+    // Read the segmented data file
     fp = fopen( filename, "rb" );
     if( fp == NULL ) {
         printf( "ERROR: The binary image file %s was not found!\n", filename );
@@ -50,9 +52,7 @@ int read_segmentation_file(Simulation *sim, const char *filename)
     return 0;
 }
 
-/*********************************************************
-    OPEN AND READ THE INPUT FILE 
- *********************************************************/
+// Open and read the input file 
 int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 {
     int i;          // loop index
@@ -91,8 +91,8 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
     fp = fopen( filename, "r" );
     if( fp == NULL )
     {
-        printf( "input_file = %s does not exist.\n", filename );
-        return -1;    // TODO: better error handling (possibly through CUDA?)
+        printf( "input file %s does not exist.\n", filename );
+        return -1;
     }
 
     // Read the input file .
@@ -126,7 +126,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
         fscanf( fp, "%f %f %f %f", &tmus, &media_prop[i].y, &media_prop[i].z, &media_prop[i].w );
         if( media_prop[i].w != 1.0 )
         {
-            printf( "WARNING: The code does not yet support n != 1.0\n" );
+            printf( "WARNING: The code does not yet fully support n != 1.0\n" );
         }
         if( tmus == 0.0 ) {
             printf( "ERROR: The code does not support mus = 0.0\n" );
@@ -155,7 +155,7 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 
     fclose(fp);
 
-    // Calculate number of gates, taking into account floating point division errors.
+    // Calculate number of time steps, taking into account floating point division errors.
     num_time_steps_float = (maxT - minT) / time_step;
     num_time_steps_int   = (int) num_time_steps_float;
     time_step_r = absf(num_time_steps_float - num_time_steps_int) * time_step;
@@ -215,19 +215,23 @@ int read_input(ExecConfig *conf, Simulation *sim, const char *filename)
 
 int write_results(Simulation sim, const char *input_filename)
 {
-    FILE *history, *fluence, *dyn;//*momentum, *path_length;
+    FILE *history, *fluence, *dyn;
     char filename[128];
     int8_t det_idx;
     int media_idx;
     uint32_t photon_idx, k;
 
     // TODO: check for errors
-    sprintf( filename, "%s.his", input_filename );
-    history = fopen( filename, "wb" );
-    sprintf( filename, "%s.dyn", input_filename );
-    dyn = fopen( filename, "w" );
-    //momentum   = fopen( "momentum_transfer", "w" );
-    //path_length = fopen( "path_length", "w" );
+    sprintf(filename, "%s.his", input_filename);
+    history = fopen(filename, "wb");
+    if( history == NULL ) {
+        printf("ERROR: unable to save history to %s\n", filename);
+    }
+    sprintf(filename, "%s.dyn", input_filename);
+    dyn = fopen(filename, "w");
+    if( dyn == NULL ) {
+        printf("ERROR: unable to save path_length and mom_transfer to %s\n", filename);
+    }
 
     if( sim.det.num != 0 )
     {
@@ -243,56 +247,27 @@ int write_results(Simulation sim, const char *input_filename)
 
                     fwrite(&sim.path_length[k], sizeof(float), 1, history);
                     fprintf(dyn, "%f %f\n", sim.path_length[k], sim.mom_transfer[k]);
-                    //fprintf(path_length, "%f\n", sim.path_length[k]);
-                    //fprintf(momentum,   "%f\n", sim.mom_transfer[k]);       
                 }
             }
         }
-    }
-
-/*    
-    // If there are no detectors, then save exit position.
     } else {
-        fwrite( &p.x, sizeof(float), 1, history );
-        fwrite( &p.y, sizeof(float), 1, history );
-        fwrite( &p.z, sizeof(float), 1, history );
-        for( j = 1; j <= s.tiss.num; j++ ) {
-            fwrite( &sim.path_length[j], sizeof(float), 1, history );
-        }
-        for( j = 1; j <= s.tiss.num; j++ ) {
-            fwrite( &sim.mom_transfer[j], sizeof(float), 1, history );
-        }
+        printf("WARNING: no detectors found!\n");
+        printf("         won't save path length nor momentum transfer.\n");
     }
-*/
 
     // Save fluence data
-    sprintf( filename, "%s.2pt", input_filename );
-    fluence = fopen( filename, "wb" );
-    if(fluence != NULL) {
-        fwrite( sim.fbox, sizeof(float), sim.grid.nIxyz * sim.num_time_steps, fluence );
-    } else {
-        printf( "ERROR: unable to save to %s\n", filename );
+    sprintf(filename, "%s.2pt", input_filename);
+    fluence = fopen(filename, "wb");
+    if( fluence == NULL ) {
+        printf("ERROR: unable to save to %s\n", filename);
         return -1;
     }
+    fwrite(sim.fbox, sizeof(float), sim.grid.nIxyz * sim.num_time_steps, fluence);
 
     // Close file handlers.
     fclose(history);
     fclose(fluence);
     fclose(dyn);
-    //fclose(momentum);
-    //fclose(path_length);
 
     return 0;
-}
-
-void parse_conf(ExecConfig *conf, int n_threads, int n_iterations)
-{
-    conf->n_threads = n_threads;
-    conf->n_blocks = conf->n_threads / 128;
-    conf->n_iterations = n_iterations;
-
-    if(conf->rand_seed > 0)
-        srand(conf->rand_seed);
-    else
-        srand(time(NULL));
 }

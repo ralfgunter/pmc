@@ -50,8 +50,8 @@ endif
 pypmc.o: pypmc.cu
 	nvcc $(NVCC_FLAGS) -c pypmc.cu -o pypmc.o
 
-pypmc.so: pypmc.o ../obj/io.o ../obj/mem.o ../obj/kernel.o
-	g++ $(LINK_FLAGS) pypmc.o ../obj/io.o ../obj/mem.o ../obj/kernel.o -o $@
+pypmc.so: pypmc.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/util.o
+	g++ $(LINK_FLAGS) pypmc.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/util.o -o $@
 
 clean:
 	rm -f pypmc.o pypmc.so

@@ -7,7 +7,7 @@
 *               2008        Qianqian Fang (fangq <at> nmr.mgh.harvard.edu)      *
 *               2011        Ralf Gunter   (ralfgunter <at> gmail.com)           *
 *                                                                               *
-* License:  4-clause BSD License, see LICENSE for details                       *
+* License:  3-clause BSD License, see LICENSE for details                       *
 *                                                                               *
 ********************************************************************************/
 

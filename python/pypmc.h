@@ -21,7 +21,6 @@ typedef struct {
     PyObject_HEAD
 
     PyObject *py_path_length, *py_momentum_transfer;
-    PyObject *py_medium;
     PyArrayObject *py_fluence;
 
     ExecConfig conf;
