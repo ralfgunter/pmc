@@ -52,8 +52,10 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_
         sincosf(theta, &stheta, &ctheta);
     }
 
-    //if(theta > 0)
-        //g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
+#ifndef NO_MOMENTUM_TRANSFER
+    if(theta > 0)
+        g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
+#endif
 
     d0.x = d->x;
     d0.y = d->y;
@@ -174,8 +176,10 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 photon_weight *= expf(-(media_prop[media_idx].y) * step);
 #endif
 
+#ifndef NO_PATH_LENGTH
                 // This photon has moved a little bit more on this specific tissue.
                 g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
+#endif
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon
