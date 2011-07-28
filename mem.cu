@@ -81,7 +81,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     cutilSafeCall(cudaMalloc((void **) &d_fbox,         num_fbox         * sizeof(float)));
     cutilSafeCall(cudaMalloc((void **) &d_det_hit, sim->n_photons * sizeof(int8_t)));
 
-//#ifdef DEBUG
+#ifdef DEBUG
     int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
                       + sizeof(float4) * (MAX_TISSUES + 1)
                       + sizeof(uint8_t) * grid_dim
@@ -91,7 +91,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                       + sizeof(int8_t) * sim->n_photons
                       + sizeof(uint32_t) * conf.n_threads * RAND_SEED_LEN;
     printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
-//#endif
+#endif
 
     // Copy simulation memory to the GPU.
     //cudaMemcpyToSymbol("det_loc", sim->det.info, sim->det.num * sizeof(int4));
