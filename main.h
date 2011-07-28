@@ -59,7 +59,7 @@
 #endif
 
 // From the CUDA SDK
-// TODO: Perhaps this should be better off on util.cu?
+// TODO: Perhaps this would be better off on util.cu?
 #define cutilSafeCall(err) __cudaSafeCall(err, __FILE__, __LINE__)
 inline void __cudaSafeCall( cudaError err, const char *file, const int line )
 {

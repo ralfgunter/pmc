@@ -88,8 +88,6 @@ pypmc_run( PyPMC *self, PyObject *args )
     // Allocate and initialize memory to be used by the GPU.
     free_gpu_params_mem(self->gmem);
     free_gpu_results_mem(self->gmem);
-    // FIXME: this prevents a big memory leak, but introduces unexpected behavior;
-    //        the results should be kept untouched until the user calls pull_results.
     free_cpu_results_mem(self->sim);
     init_mem(self->conf, &self->sim, &self->gmem);
 
@@ -112,6 +110,10 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     self->py_path_length = pypmc_get_tissueArray(self->sim, self->sim.path_length);
     self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.mom_transfer);
     self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.fbox);
+
+    // We won't need the C results anymore, as everything is available as
+    // python objects.
+    //free_cpu_results_mem(self->sim);
 
     Py_RETURN_NONE;
 }
@@ -141,6 +143,7 @@ pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
 {
     PyArrayObject *ndarray;
     npy_intp dim[4];
+    //size_t sizeof_fluence;
 
     dim[0] = sim.grid.fbox_dim.x;
     dim[1] = sim.grid.fbox_dim.y;
@@ -148,6 +151,9 @@ pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
     dim[3] = sim.num_time_steps;
 
     ndarray = (PyArrayObject *) PyArray_SimpleNewFromData(4, dim, NPY_FLOAT, c_fluence);
+    //ndarray = (PyArrayObject *) PyArray_SimpleNew(4, dim, NPY_FLOAT);
+    //sizeof_fluence = sizeof(float) * sim.grid.nIxyz * sim.num_time_steps;
+    //memcpy(PyArray_DATA(ndarray), (const void *) c_fluence, sizeof_fluence);
 
     PyArray_STRIDE(ndarray, 0) = sizeof(float);
     PyArray_STRIDE(ndarray, 1) = sizeof(float) * sim.grid.fbox_dim.x;
@@ -507,6 +513,7 @@ pypmc_get_detectors( PyPMC *self, void *closure )
                                         self->sim.det.info[i].w);
 
         PyList_Append(det_list, entry);
+        Py_DECREF(entry);
     }
 
     return det_list;
@@ -526,6 +533,7 @@ pypmc_get_tissues( PyPMC *self, void *closure )
                                               self->sim.tiss.prop[i].w);
 
         PyList_Append(tissue_list, entry);
+        Py_DECREF(entry);
     }
 
     return tissue_list;
@@ -567,6 +575,7 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
     int8_t det_idx;
     int media_idx;
     uint32_t photon_idx, k;
+    PyObject *photon_history, *entry;
     PyObject *py_tissueArray = Py_BuildValue("[]");
 
     if( sim.det.num != 0 )
@@ -577,16 +586,19 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
             {
                 // For each photon detected, store an array with its history and
                 // the detector's number.
-                PyObject *photon_history = Py_BuildValue("[i]", det_idx - 1);
+                photon_history = Py_BuildValue("[i]", det_idx - 1);
 
                 for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
                     k = MAD_IDX(photon_idx, media_idx);
+                    entry = PyFloat_FromDouble(tissueArray[k]);
 
-                    PyList_Append(photon_history, PyFloat_FromDouble(tissueArray[k]));
+                    PyList_Append(photon_history, entry);
+                    Py_DECREF(entry);
                 }
 
                 PyList_Append(py_tissueArray, photon_history);
+                Py_DECREF(photon_history);
             }
         }
     }

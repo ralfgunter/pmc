@@ -52,8 +52,8 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_
         sincosf(theta, &stheta, &ctheta);
     }
 
-    if(theta > 0)
-        g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
+    //if(theta > 0)
+        //g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
 
     d0.x = d->x;
     d0.y = d->y;
@@ -286,4 +286,6 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
         cudaFree(d_seed);
         d_seed = temp_seed;
     }
+
+    cudaFree(d_seed);
 }
