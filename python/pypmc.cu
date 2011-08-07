@@ -86,7 +86,7 @@ static CUT_THREADPROC run_sim( void *self_void )
     PyPMC *self = (PyPMC *) self_void;
 
     if(self->ctx == NULL)
-    	safeCall(cudaSetDevice(self->gpu_id));
+    	cutilSafeCall(cudaSetDevice(self->gpu_id));
 
     // Allocate and initialize memory to be used by the GPU.
     free_gpu_params_mem(self->gmem);
