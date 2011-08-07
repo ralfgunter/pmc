@@ -53,8 +53,8 @@ pypmc.o: pypmc.cu
 multithreading.o: multithreading.cpp multithreading.h
 	g++ -fPIC -c $<
 
-pypmc.so: pypmc.o multithreading.o ../obj/io.o ../obj/mem.o ../obj/kernel.o
-	g++ $(LINK_FLAGS) pypmc.o multithreading.o ../obj/io.o ../obj/mem.o ../obj/kernel.o -o $@
+pypmc.so: pypmc.o multithreading.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/util.o
+	g++ $(LINK_FLAGS) pypmc.o multithreading.o ../obj/io.o ../obj/mem.o ../obj/kernel.o ../obj/util.o -o $@
 
 clean:
 	rm -f pypmc.o pypmc.so multithreading.o

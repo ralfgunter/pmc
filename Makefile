@@ -24,11 +24,14 @@ obj/%.o: %.cu
 pmc: $(OBJ)
 	nvcc $(LINK_FLAGS) $(OBJ) -o pmc 
 
-debug: NVCC_FLAGS += -g -G -use_fast_math -Xptxas="-v"
+debug: NVCC_FLAGS += -DDEBUG -g -G -use_fast_math -Xptxas="-v"
 debug: LINK_FLAGS += -g -G
 debug: pmc 
 
 opt: NVCC_FLAGS += -use_fast_math -arch=compute_11
+#opt: NVCC_FLAGS += -DNO_FLUENCE
+#opt: NVCC_FLAGS += -DNO_MOMENTUM_TRANSFER
+#opt: NVCC_FLAGS += -DNO_PATH_LENGTH
 opt: pmc 
 
 python3: opt

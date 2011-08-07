@@ -7,7 +7,7 @@
 *               2008        Qianqian Fang (fangq <at> nmr.mgh.harvard.edu)      *
 *               2011        Ralf Gunter   (ralfgunter <at> gmail.com)           *
 *                                                                               *
-* License:  4-clause BSD License, see LICENSE for details                       *
+* License:  3-clause BSD License, see LICENSE for details                       *
 *                                                                               *
 ********************************************************************************/
 
@@ -25,7 +25,8 @@ __constant__ Simulation s;
 __constant__ GPUMemory g;
 
 // TODO: do away with the first argument.
-__device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_t photon_idx, float3 *d)
+__device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx,
+                                  uint32_t photon_idx, uint32_t thread_idx, float3 *d)
 {
     float3 d0;
     float rand;
@@ -33,7 +34,6 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_
     float theta, stheta, ctheta;
     float phi, sphi, cphi;
 
-    // TODO: study more closely the random functions.
     rand = rand_next_aangle(t);
     phi = 2.0 * PI * rand;
     sincosf(phi, &sphi, &cphi);
@@ -52,8 +52,10 @@ __device__ void henyey_greenstein(float *t, float gg, uint8_t media_idx, uint32_
         sincosf(theta, &stheta, &ctheta);
     }
 
+#ifndef NO_MOMENTUM_TRANSFER
     if(theta > 0)
-        g.mom_transfer[MAD_IDX(photon_idx, media_idx)] += 1 - ctheta;
+        g.temp_mom_transfer[LIN2D(thread_idx, media_idx, (blockDim.x * gridDim.x))] += 1 - ctheta;
+#endif
 
     d0.x = d->x;
     d0.y = d->y;
@@ -75,33 +77,52 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     float4 *media_prop = (float4 *) det_loc + MAX_DETECTORS;
 
     // Loop index
-    int i;
+    int i, m;
 
-    uint32_t threadIndex = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
+    uint32_t thread_idx = LIN2D(threadIdx.x, blockIdx.x, blockDim.x);
 
     uint8_t media_idx;   // tissue type of the current voxel
-    int time;            // time elapsed since the photon was launched
     float step;
     float musr;
+#ifndef NO_FLUENCE
+    int time;            // time elapsed since the photon was launched
+#endif
 
     // Random number generation
     float t[RAND_BUF_LEN], tnew[RAND_BUF_LEN];
 
-    det_loc[threadIdx.x] = g.det_loc[threadIdx.x];
-    det_loc[2*threadIdx.x] = g.det_loc[2*threadIdx.x];
-    media_prop[threadIdx.x] = g.media_prop[threadIdx.x];
+    if(threadIdx.x < 128)
+    {
+        det_loc[threadIdx.x] = g.det_loc[threadIdx.x];
+        det_loc[2*threadIdx.x] = g.det_loc[2*threadIdx.x];
+        media_prop[threadIdx.x] = g.media_prop[threadIdx.x];
+    }
     __syncthreads();
 
-    gpu_rng_init(t, tnew, seed, threadIndex);
+    gpu_rng_init(t, tnew, seed, thread_idx);
 
     int photons_run = 0;
     while(photons_run < photons_per_thread)
     {
-        uint32_t photon_idx = LIN3D(photons_run, threadIndex, iteration, photons_per_thread, (blockDim.x * gridDim.x));
+        uint32_t photon_idx = LIN3D(photons_run, thread_idx, iteration,
+                                    photons_per_thread, (blockDim.x * gridDim.x));
         photons_run++;
 
+        for( m = 0; m < s.tiss.num + 1; m++ )
+        {
+#ifndef NO_MOMENTUM_TRANSFER
+            g.temp_mom_transfer[LIN2D(thread_idx, m, (blockDim.x * gridDim.x))] = 0;
+#endif
+#ifndef NO_PATH_LENGTH
+            g.temp_path_length[LIN2D(thread_idx, m, (blockDim.x * gridDim.x))] = 0;
+#endif
+        }
+
+
         // Set the photon weight to 1 and initialize photon length parameters
+#ifndef NO_FLUENCE
         float photon_weight = 1.0;   // photon weight
+#endif
         float dist = 0.0;   // distance traveled so far by the photon 
         float Lnext = s.grid.minstepsize;
         float Lresid = 0.0;
@@ -139,13 +160,14 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
             {
                 if(dist > Lnext && dist > s.min_length)
                 {
+#ifndef NO_FLUENCE
                     time = (int) ((dist - s.min_length) * s.stepLr);
-
                     if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
                         p.y >= s.grid.fbox_min.y && p.y <= s.grid.fbox_max.y &&
                         p.z >= s.grid.fbox_min.z && p.z <= s.grid.fbox_max.z &&
                         time < s.num_time_steps )
                         g.fbox[LIN(p.x, p.y, p.z, time, s.grid)] += photon_weight;
+#endif
 
                     Lnext += s.grid.minstepsize;
                 }
@@ -165,16 +187,21 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
                 r.z += d.z * step;
                 dist += step;
 
+#ifndef NO_FLUENCE
                 photon_weight *= expf(-(media_prop[media_idx].y) * step);
+#endif
 
-                g.path_length[MAD_IDX(photon_idx, media_idx)] += step;
+#ifndef NO_PATH_LENGTH
+                // This photon has moved a little bit more on this specific tissue.
+                g.temp_path_length[LIN2D(thread_idx, media_idx, (blockDim.x * gridDim.x))] += step;
+#endif
 
                 MOVE(p, r, s.grid.stepr);
             } // Propagate photon
 
             // Calculate the new scattering angle using henyey-greenstein
             if(media_idx != 0)
-                henyey_greenstein(t, media_prop[media_idx].z, media_idx, photon_idx, &d);
+                henyey_greenstein(t, media_prop[media_idx].z, media_idx, photon_idx, thread_idx, &d);
         } // loop until end of single photon
 
         // Score exiting photon
@@ -187,19 +214,39 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
             media_idx = g.media_type[LIN3D(p.x, p.y, p.z, s.grid.dim.x, s.grid.dim.y)];
             if(media_idx == 0)
             {
+#ifndef NO_FLUENCE
                 time = (int) ((dist - s.min_length) * s.stepLr);
                 if( p.x >= s.grid.fbox_min.x && p.x <= s.grid.fbox_max.x &&
                     p.y >= s.grid.fbox_min.y && p.y <= s.grid.fbox_max.y &&
                     p.z >= s.grid.fbox_min.z && p.z <= s.grid.fbox_max.z &&
                     time < s.num_time_steps )
                     g.fbox[LIN(p.x, p.y, p.z, time, s.grid)] -= photon_weight;
+#endif
 
                 // Did the photon hit a detector?
                 for( i = 0; i < s.det.num; i++ )
+                {
                     if( absf(p.x - det_loc[i].x) <= det_loc[i].w &&
                         absf(p.y - det_loc[i].y) <= det_loc[i].w &&
                         absf(p.z - det_loc[i].z) <= det_loc[i].w )
+                    {
                         g.det_hit[photon_idx] = i + 1;
+
+                        for( m = 0; m < s.tiss.num + 1; m++ )
+                        {
+#ifndef NO_MOMENTUM_TRANSFER 
+                            g.mom_transfer[MAD_IDX(photon_idx, m)] =
+                                g.temp_mom_transfer[LIN2D(thread_idx, m, (blockDim.x * gridDim.x))];
+                            g.temp_mom_transfer[LIN2D(thread_idx, m, (blockDim.x * gridDim.x))] = 0;
+#endif
+#ifndef NO_PATH_LENGTH
+                            g.path_length[MAD_IDX(photon_idx, m)] =
+                                g.temp_path_length[LIN2D(thread_idx, m, (blockDim.x * gridDim.x))];
+                            g.temp_path_length[LIN2D(thread_idx, m, (blockDim.x * gridDim.x))] = 0;
+#endif
+                        }
+                    }
+                }
             }
         }
     }
@@ -256,8 +303,10 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
     int photons_per_thread = photons_per_iteration / conf.n_threads;
     int iteration = 0;
 
-    //printf("photons per thread = %d\n", photons_per_thread);
-    //printf("photons per iteration = %d\n", photons_per_iteration);
+#ifdef DEBUG
+    printf("photons per thread = %d\n", photons_per_thread);
+    printf("photons per iteration = %d\n", photons_per_iteration);
+#endif
 
     seed = conf.rand_seed;
     d_seed = gmem.seed;

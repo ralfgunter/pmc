@@ -1,3 +1,13 @@
+/********************************************************************************
+*                     Photonic Monte Carlo - python wrapper                     * 
+*********************************************************************************
+*                                                                               *
+* Copyright (C) 2011        Ralf Gunter   (ralfgunter <at> gmail.com)           *
+*                                                                               *
+* License:  3-clause BSD License, see LICENSE for details                       *
+*                                                                               *
+********************************************************************************/
+
 #include "pypmc.h"
 
 ////////////////////////////////////////////////////////////////////
@@ -81,8 +91,6 @@ static CUT_THREADPROC run_sim( void *self_void )
     // Allocate and initialize memory to be used by the GPU.
     free_gpu_params_mem(self->gmem);
     free_gpu_results_mem(self->gmem);
-    // FIXME: this prevents a big memory leak, but introduces unexpected behavior
-    //        the results should be kept untouched until the user calls pull_results.
     free_cpu_results_mem(self->sim);
     init_mem(self->conf, &self->sim, &self->gmem);
 
@@ -145,6 +153,10 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.mom_transfer);
     self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.fbox);
 
+    // We won't need the C results anymore, as everything is available as
+    // python objects.
+    //free_cpu_results_mem(self->sim);
+
     Py_RETURN_NONE;
 }
 
@@ -163,13 +175,6 @@ pypmc_load_medium( PyPMC *self, PyObject *args )
 
     read_segmentation_file(&self->sim, medium_filepath);
 
-    // TODO: better handle this
-    self->sim.grid.fbox_dim.x = dim_x;
-    self->sim.grid.fbox_dim.y = dim_y;
-    self->sim.grid.fbox_dim.z = dim_z;
-    self->sim.grid.nIxy  = dim_x * dim_y;
-    self->sim.grid.nIxyz = dim_x * dim_y * dim_z;
-
     Py_RETURN_NONE;
 }
 
@@ -180,6 +185,7 @@ pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
 {
     PyArrayObject *ndarray;
     npy_intp dim[4];
+    //size_t sizeof_fluence;
 
     dim[0] = sim.grid.fbox_dim.x;
     dim[1] = sim.grid.fbox_dim.y;
@@ -187,6 +193,9 @@ pypmc_fluence_to_ndarray( Simulation sim, float *c_fluence )
     dim[3] = sim.num_time_steps;
 
     ndarray = (PyArrayObject *) PyArray_SimpleNewFromData(4, dim, NPY_FLOAT, c_fluence);
+    //ndarray = (PyArrayObject *) PyArray_SimpleNew(4, dim, NPY_FLOAT);
+    //sizeof_fluence = sizeof(float) * sim.grid.nIxyz * sim.num_time_steps;
+    //memcpy(PyArray_DATA(ndarray), (const void *) c_fluence, sizeof_fluence);
 
     PyArray_STRIDE(ndarray, 0) = sizeof(float);
     PyArray_STRIDE(ndarray, 1) = sizeof(float) * sim.grid.fbox_dim.x;
@@ -269,7 +278,7 @@ pypmc_set_src_pos( PyPMC *self, PyObject *coords, void *closure )
     if (! (PyTuple_Check(coords) && PyTuple_Size(coords) == 3))
     {
         PyErr_SetString(PyExc_TypeError,
-                        "The attribute must be a tuple with three elements");
+                        "The source position must be a tuple with three elements");
         return -1;
     }
 
@@ -330,6 +339,10 @@ pypmc_set_detectors( PyPMC *self, PyObject *det_list, void *closure )
     // The old detector list must be freed, and a new one built in its place.
     free(self->sim.det.info);
     self->sim.det.info = (int4 *) malloc(num_detectors * sizeof(int4));
+    if (self->sim.det.info == NULL) {
+        PyErr_SetString(PyExc_MemoryError, "Could not allocate detector list\n");
+        return -1;
+    }
 
     for (int i = 0; i < num_detectors; ++i)
     {
@@ -363,6 +376,10 @@ pypmc_set_tissues( PyPMC *self, PyObject *tissue_list, void *closure )
     // The old tissue list must be freed, and a new one built in its place.
     free(self->sim.tiss.prop);
     self->sim.tiss.prop = (float4 *) malloc((num_tissues + 1) * sizeof(float4));
+    if (self->sim.tiss.prop == NULL) {
+        PyErr_SetString(PyExc_MemoryError, "Could not allocate tissue list\n");
+        return -1;
+    }
 
     for (int i = 0; i < num_tissues; ++i)
     {
@@ -470,10 +487,6 @@ pypmc_set_time_params( PyPMC *self, PyObject *value, void *closure )
     self->sim.max_length     = max_time * C_VACUUM / self->sim.tiss.prop[1].w;
     self->sim.min_length     = min_time * C_VACUUM / self->sim.tiss.prop[1].w;
     self->sim.stepLr = 1.0 / (time_step * C_VACUUM / self->sim.tiss.prop[1].w);
-    printf("num_time_steps = %d\n", num_time_steps);
-    printf("max, min, stepLr = %lf, %lf, %lf\n", self->sim.max_length,
-                                                 self->sim.min_length,
-                                                 self->sim.stepLr);
 
     self->sim.num_time_steps = num_time_steps;
     self->sim.time_step = time_step;
@@ -531,17 +544,18 @@ pypmc_get_src_dir( PyPMC *self, void *closure )
 static PyObject*
 pypmc_get_detectors( PyPMC *self, void *closure )
 {
+    PyObject *entry;
     PyObject *det_list = Py_BuildValue("[]");
-    PyObject *det_entry;
 
     for (int i = 0; i < self->sim.det.num; ++i)
     {
-        det_entry = Py_BuildValue("(iiii)", self->sim.det.info[i].x,
-                                            self->sim.det.info[i].y,
-                                            self->sim.det.info[i].z,
-                                            self->sim.det.info[i].w);
+        entry = Py_BuildValue("(iiii)", self->sim.det.info[i].x,
+                                        self->sim.det.info[i].y,
+                                        self->sim.det.info[i].z,
+                                        self->sim.det.info[i].w);
 
-        PyList_Append(det_list, det_entry);
+        PyList_Append(det_list, entry);
+        Py_DECREF(entry);
     }
 
     return det_list;
@@ -556,11 +570,12 @@ pypmc_get_tissues( PyPMC *self, void *closure )
     for (int i = 1; i <= self->sim.tiss.num; ++i)
     {
         entry = Py_BuildValue("(ffff)", 1.0 / self->sim.tiss.prop[i].x,
-                                        self->sim.tiss.prop[i].y,
-                                        self->sim.tiss.prop[i].z,
-                                        self->sim.tiss.prop[i].w);
+                                              self->sim.tiss.prop[i].y,
+                                              self->sim.tiss.prop[i].z,
+                                              self->sim.tiss.prop[i].w);
 
         PyList_Append(tissue_list, entry);
+        Py_DECREF(entry);
     }
 
     return tissue_list;
@@ -602,6 +617,7 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
     int8_t det_idx;
     int media_idx;
     uint32_t photon_idx, k;
+    PyObject *photon_history, *entry;
     PyObject *py_tissueArray = Py_BuildValue("[]");
 
     if( sim.det.num != 0 )
@@ -612,16 +628,19 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
             {
                 // For each photon detected, store an array with its history and
                 // the detector's number.
-                PyObject *photon_history = Py_BuildValue("[i]", det_idx - 1);
+                photon_history = Py_BuildValue("[i]", det_idx - 1);
 
                 for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
                     k = MAD_IDX(photon_idx, media_idx);
+                    entry = PyFloat_FromDouble(tissueArray[k]);
 
-                    PyList_Append(photon_history, PyFloat_FromDouble(tissueArray[k]));
+                    PyList_Append(photon_history, entry);
+                    Py_DECREF(entry);
                 }
 
                 PyList_Append(py_tissueArray, photon_history);
+                Py_DECREF(photon_history);
             }
         }
     }
@@ -632,7 +651,7 @@ pypmc_get_tissueArray( Simulation sim, float *tissueArray )
 static PyObject*
 pypmc_get_time_params( PyPMC *self, void *closure )
 {
-    double min_time, max_time, time_step;
+    float min_time, max_time, time_step;
 
     min_time  = self->sim.min_length * self->sim.tiss.prop[1].w / C_VACUUM;
     max_time  = self->sim.max_length * self->sim.tiss.prop[1].w / C_VACUUM;
