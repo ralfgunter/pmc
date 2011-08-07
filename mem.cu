@@ -29,6 +29,7 @@ uint32_t* init_rand_seed(int seed, ExecConfig conf)
     for(int i = 0; i < conf.n_threads * RAND_SEED_LEN; i++)
         h_seed[i] = rand();
 
+    //DEV_ALLOC(d_seed, sizeof_seed);
     cutilSafeCall(cudaMalloc((void **) &d_seed, sizeof_seed));
     TO_DEVICE(d_seed, h_seed, sizeof_seed);
 
@@ -41,12 +42,14 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 {
     float *d_fbox;
     float *d_path_length, *d_mom_transfer;
+    float *d_temp_path_length, *d_temp_mom_transfer;
+    float *h_temp_tissueArrays;
     uint8_t *h_linear_media_type, *d_media_type;
     int8_t *d_det_hit;
     uint32_t *d_seed;
     int4 *d_det_loc;
     float4 *d_media_prop;
-    size_t num_tissueArrays, num_fbox;
+    size_t num_temp_tissueArrays, num_tissueArrays, num_fbox;
 
     // Calculate the total number of voxel elements.
     int grid_dim = sim->grid.dim.x * sim->grid.dim.y * sim->grid.dim.z;
@@ -59,8 +62,10 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     // Setup the path length and momentum transfer arrays.
     //num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
     num_tissueArrays = 1 << NUM_HASH_BITS;
+    num_temp_tissueArrays = conf.n_threads * (sim->tiss.num + 1);
     sim->path_length  = (float *) calloc(num_tissueArrays, sizeof(float));
     sim->mom_transfer = (float *) calloc(num_tissueArrays, sizeof(float));
+    h_temp_tissueArrays = (float *) calloc(num_temp_tissueArrays, sizeof(float));
 
     // Photon fluence.
     num_fbox = sim->grid.nIxyz * sim->num_time_steps;
@@ -73,13 +78,15 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     d_seed = init_rand_seed(conf.rand_seed, conf);
 
     // Allocate memory on the GPU global memory.
-    cutilSafeCall(cudaMalloc((void **) &d_det_loc, MAX_DETECTORS * sizeof(int4)));
-    cutilSafeCall(cudaMalloc((void **) &d_media_prop, (MAX_TISSUES + 1) * sizeof(float4)));
-    cutilSafeCall(cudaMalloc((void **) &d_media_type, grid_dim * sizeof(uint8_t)));
-    cutilSafeCall(cudaMalloc((void **) &d_path_length,  num_tissueArrays * sizeof(float)));
-    cutilSafeCall(cudaMalloc((void **) &d_mom_transfer, num_tissueArrays * sizeof(float)));
-    cutilSafeCall(cudaMalloc((void **) &d_fbox,         num_fbox         * sizeof(float)));
-    cutilSafeCall(cudaMalloc((void **) &d_det_hit, sim->n_photons * sizeof(int8_t)));
+    DEV_ALLOC(&d_det_loc, MAX_DETECTORS * sizeof(int4));
+    DEV_ALLOC(&d_media_prop, (MAX_TISSUES + 1) * sizeof(float4));
+    DEV_ALLOC(&d_media_type, grid_dim * sizeof(uint8_t));
+    DEV_ALLOC(&d_path_length,  num_tissueArrays * sizeof(float));
+    DEV_ALLOC(&d_mom_transfer, num_tissueArrays * sizeof(float));
+    DEV_ALLOC(&d_fbox, num_fbox * sizeof(float));
+    DEV_ALLOC(&d_det_hit, sim->n_photons * sizeof(int8_t));
+    DEV_ALLOC(&d_temp_path_length, num_temp_tissueArrays * sizeof(float));
+    DEV_ALLOC(&d_temp_mom_transfer, num_temp_tissueArrays * sizeof(float));
 
 #ifdef DEBUG
     int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
@@ -89,6 +96,8 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
                       + sizeof(float) * num_tissueArrays
                       + sizeof(float) * num_fbox
                       + sizeof(int8_t) * sim->n_photons
+                      + sizeof(float) * num_temp_tissueArrays
+                      + sizeof(float) * num_temp_tissueArrays
                       + sizeof(uint32_t) * conf.n_threads * RAND_SEED_LEN;
     printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
 #endif
@@ -102,8 +111,10 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     TO_DEVICE(d_media_type, h_linear_media_type, grid_dim * sizeof(uint8_t));
     TO_DEVICE(d_path_length, sim->path_length, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_mom_transfer, sim->mom_transfer, num_tissueArrays * sizeof(float));
-    TO_DEVICE(d_fbox,      sim->fbox,      num_fbox           * sizeof(float));
+    TO_DEVICE(d_fbox, sim->fbox, num_fbox * sizeof(float));
     TO_DEVICE(d_det_hit, sim->det.hit, sim->n_photons * sizeof(int8_t));
+    TO_DEVICE(d_temp_path_length, h_temp_tissueArrays, num_temp_tissueArrays * sizeof(float));
+    TO_DEVICE(d_temp_mom_transfer, h_temp_tissueArrays, num_temp_tissueArrays * sizeof(float));
 
     // Update GPU memory structure (so that its pointers can be used elsewhere).
     gmem->det_loc = d_det_loc;
@@ -114,10 +125,13 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     gmem->fbox = d_fbox;
     gmem->det_hit = d_det_hit;
     gmem->seed = d_seed;
+    gmem->temp_path_length = d_temp_path_length;
+    gmem->temp_mom_transfer = d_temp_mom_transfer;
     cutilSafeCall(cudaMemcpyToSymbol("g", gmem, sizeof(GPUMemory)));
 
     // Free temporary memory used on the host.
     free(h_linear_media_type);
+    free(h_temp_tissueArrays);
 }
 
 void free_gpu_results_mem(GPUMemory gmem)
@@ -125,6 +139,8 @@ void free_gpu_results_mem(GPUMemory gmem)
     // Path length and momentum transfer.
     cutilSafeCall(cudaFree(gmem.path_length));
     cutilSafeCall(cudaFree(gmem.mom_transfer));
+    cutilSafeCall(cudaFree(gmem.temp_path_length));
+    cutilSafeCall(cudaFree(gmem.temp_mom_transfer));
 
     // Photon fluence.
     cutilSafeCall(cudaFree(gmem.fbox));

@@ -30,6 +30,8 @@ debug: pmc
 
 opt: NVCC_FLAGS += -use_fast_math -arch=compute_11
 #opt: NVCC_FLAGS += -DNO_FLUENCE
+#opt: NVCC_FLAGS += -DNO_MOMENTUM_TRANSFER
+#opt: NVCC_FLAGS += -DNO_PATH_LENGTH
 opt: pmc 
 
 python3: opt

@@ -36,6 +36,7 @@
 #define MIN(a,b) ((a) < (b) ? (a) :  (b))
 #define absf(x)  ((x) >  0  ? (x) : -(x))
 
+#define DEV_ALLOC(d_ptr, size) cutilSafeCall(cudaMalloc((void **) (d_ptr), (size)))
 #define TO_DEVICE(d_ptr, h_ptr, size) cutilSafeCall(cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyHostToDevice))
 #define TO_HOST(d_ptr, h_ptr, size)   cutilSafeCall(cudaMemcpy(d_ptr, h_ptr, size, cudaMemcpyDeviceToHost))
 
@@ -51,7 +52,7 @@
 // multiply-add code from wikipedia
 #define NUM_HASH_BITS 24 // 64 MBs by default
 #if (__x86_64 == 1) // TODO: find out if there is a better way
-#define MAD_HASH(key) ((uint64_t) (0x27253271b2cb5ad6 * (key)) >> (64 - NUM_HASH_BITS + 1))
+#define MAD_HASH(key) ((uint64_t) (0x27253271b2cb5ad5 * (key)) >> (64 - NUM_HASH_BITS + 1))
 #define MAD_IDX(x, y) MAD_HASH((x << 8) | y)
 #else
 #define MAD_HASH(key) ((unsigned) (0x27253271 * (key)) >> (32 - NUM_HASH_BITS + 1))
@@ -129,6 +130,7 @@ typedef struct {
 
     // Path length and momentum transfer.
     float *path_length, *mom_transfer;
+    float *temp_path_length, *temp_mom_transfer;
 
     // Photon fluence
     float *fbox;
