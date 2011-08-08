@@ -35,22 +35,15 @@ gpu2.fluence_box = ((0, 249), (0, 69), (0, 59))
 gpu2.src_dir = (0.0, 0.0, 1.0)
 gpu2.src_pos = (12.5, 3.5, 1.0)
 
-# First run
-print("\nRun 1")
-gpu1.run_simulation(0)
+for i in xrange(100):
+    gpu1.tissues = [(1.0 + i/200.0, 0.01, 0.05, 1.0)]
+    gpu2.tissues = [(1.5 + i/200.0, 0.01, 0.05, 1.0)]
 
-# Second run
-print("\nRun 2")
-gpu2.run_simulation(1)
+    gpu1.run_simulation(0)
+    gpu2.run_simulation(1)
 
-# Pulling results
-print("Pull 1")
-gpu1.pull_results()
-print("Pull 2")
-gpu2.pull_results()
+    gpu1.sync()
+    gpu2.sync()
 
-# Compare fluence from each run
-print("\nFluence results: ")
-for i in range(num_steps):
-    print("gpu1: " + repr(gpu1.fluence[74][34][13][i]))
-    print("gpu2: " + repr(gpu2.fluence[74][34][13][i]))
+    print("gpu1: " + repr(gpu1.path_length[0]))
+    print("gpu2: " + repr(gpu2.path_length[0]))

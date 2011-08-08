@@ -81,69 +81,12 @@ pypmc_write_to_disk( PyPMC *self, PyObject *args )
 
     Py_RETURN_NONE;
 }
-static CUT_THREADPROC run_sim( void *self_void )
+
+static void
+pypmc_pull_results( PyPMC *self )
 {
-    PyPMC *self = (PyPMC *) self_void;
-
-    if(self->ctx == NULL)
-    	cutilSafeCall(cudaSetDevice(self->gpu_id));
-
-    // Allocate and initialize memory to be used by the GPU.
-    free_gpu_params_mem(self->gmem);
-    free_gpu_results_mem(self->gmem);
-    free_cpu_results_mem(self->sim);
-    init_mem(self->conf, &self->sim, &self->gmem);
-
-    // Run simulations on the GPU.
-    simulate(self->conf, self->sim, self->gmem);
-
-    cuCtxPopCurrent(&self->ctx);
-
-    CUT_THREADEND;
-}
-
-static PyObject *
-pypmc_run( PyPMC *self, PyObject *args )
-{
-    if (! PyArg_ParseTuple(args, "i", &self->gpu_id))
-        return NULL;
-
-    // Release the GIL, since we're about to begin a new, time-consuming simulation
-    Py_BEGIN_ALLOW_THREADS
-
-    // Spawn a new thread to handle this simulation
-    // While this might be a bit counterintuitive in the case only a single GPU
-    // is installed, it simplifies things a lot otherwise.
-    self->thread = cutStartThread((CUT_THREADROUTINE) run_sim, (void *) self);
-
-    // Reacquire the GIL, as we're done.
-    Py_END_ALLOW_THREADS
-
-    Py_RETURN_NONE;
-}
-
-static CUT_THREADPROC pull_results(void *self_void)
-{
-    PyPMC *self = (PyPMC *) self_void;
-
-    cuCtxPushCurrent(self->ctx);
-
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
-
-    cuCtxPopCurrent(&self->ctx);
-
-    CUT_THREADEND;
-}
-
-static PyObject *
-pypmc_pull_results( PyPMC *self, PyObject *args )
-{
-    // Make sure the last simulation has finished running before moving on.
-    cutEndThread(self->thread);
-
-    CUTThread t = cutStartThread((CUT_THREADROUTINE) pull_results, (void *) self);
-    cutEndThread(t);
 
     Py_XDECREF(self->py_path_length);
     Py_XDECREF(self->py_momentum_transfer);
@@ -156,6 +99,47 @@ pypmc_pull_results( PyPMC *self, PyObject *args )
     // We won't need the C results anymore, as everything is available as
     // python objects.
     //free_cpu_results_mem(self->sim);
+}
+
+static CUT_THREADPROC run_sim( void *self_void )
+{
+    PyPMC *self = (PyPMC *) self_void;
+
+    cutilSafeCall(cudaSetDevice(self->gpu_id));
+
+    // Allocate and initialize memory to be used by the GPU.
+    free_gpu_params_mem(self->gmem);
+    free_gpu_results_mem(self->gmem);
+    free_cpu_results_mem(self->sim);
+    init_mem(self->conf, &self->sim, &self->gmem);
+
+    // Run simulations on the GPU.
+    simulate(self->conf, self->sim, self->gmem);
+
+    // Retrieve results.
+    pypmc_pull_results(self);
+
+    CUT_THREADEND;
+}
+
+static PyObject *
+pypmc_run( PyPMC *self, PyObject *args )
+{
+    if (! PyArg_ParseTuple(args, "i", &self->gpu_id))
+        return NULL;
+
+    // Spawn a new thread to handle this simulation
+    // While this might be a bit counterintuitive in the case only a single GPU
+    // is installed, it simplifies things a lot otherwise.
+    self->thread = cutStartThread((CUT_THREADROUTINE) run_sim, (void *) self);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject * 
+pypmc_sync( PyPMC *self, PyObject *args )
+{
+    cutEndThread(self->thread);
 
     Py_RETURN_NONE;
 }
@@ -721,8 +705,8 @@ static PyMemberDef pypmc_members[] = {
 static PyMethodDef pypmc_methods[] = {
     {"run_simulation", (PyCFunction) pypmc_run, METH_VARARGS,
      "Does what it says on the tin."},
-    {"pull_results", (PyCFunction) pypmc_pull_results, METH_NOARGS,
-     "Transfers the simulation results to the host memory."},
+    {"sync", (PyCFunction) pypmc_sync, METH_NOARGS,
+     "Makes sure the previous simulation has finished running."},
     {"write_to_disk", (PyCFunction) pypmc_write_to_disk, METH_VARARGS,
      "Saves the simulation results to disk, the old-fashioned way."},
     {"load_medium", (PyCFunction) pypmc_load_medium, METH_VARARGS,

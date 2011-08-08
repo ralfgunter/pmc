@@ -24,7 +24,7 @@ obj.src_pos = (12.5, 3.5, 1.0)
 # First run
 print("Running the first simulation")
 obj.run_simulation(0)
-obj.pull_results()
+obj.sync()
 
 # Copy first run's fluence to another array.
 f = numpy.asfortranarray(obj.fluence).copy()
@@ -33,7 +33,7 @@ f = numpy.asfortranarray(obj.fluence).copy()
 print("Running the second simulation")
 obj.n_photons = 2**21
 obj.run_simulation(0)
-obj.pull_results()
+obj.sync()
 
 # Compare fluence from each run
 for i in range(num_steps):
