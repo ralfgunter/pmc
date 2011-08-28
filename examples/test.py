@@ -14,7 +14,7 @@ obj.rand_seed = 32898232
 obj.n_photons = 2**20
 obj.detectors = [(74, 34, 9, 1)]
 obj.tissues = [(1.1, 0.01, 0.05, 1.0)]
-obj.grid_dimensions = ((250, 0.1), (70, 0.1), (60, 0.1))
+obj.grid_dimensions = (0.1, 0.1, 0.1)
 obj.time_params = (0, max_time, step)
 obj.load_medium("MouseLimb.bin", 250, 70, 60)
 obj.fluence_box = ((0, 249), (0, 69), (0, 59))

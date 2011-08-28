@@ -355,9 +355,6 @@ pypmc_set_tissues( PyPMC *self, PyObject *tissue_list, void *closure )
 static int
 pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
 {
-    PyObject *dim;
-
-    // TODO: verify that every element is a tuple of two elements
     if (! (PyTuple_Check(dimensions) && PyTuple_Size(dimensions) == 3))
     {
         PyErr_SetString(PyExc_TypeError,
@@ -365,17 +362,9 @@ pypmc_set_grid_dimensions( PyPMC *self, PyObject *dimensions, void *closure )
         return -1;
     }
 
-    dim = PyTuple_GetItem(dimensions, 0);
-    self->sim.grid.dim.x = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.stepr.x = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
-
-    dim = PyTuple_GetItem(dimensions, 1);
-    self->sim.grid.dim.y = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.stepr.y = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
-
-    dim = PyTuple_GetItem(dimensions, 2);
-    self->sim.grid.dim.z = PyLong_AsLong(PyTuple_GetItem(dim, 0));
-    self->sim.grid.stepr.z = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dim, 1));
+    self->sim.grid.stepr.x = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dimensions, 0));
+    self->sim.grid.stepr.y = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dimensions, 1));
+    self->sim.grid.stepr.z = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(dimensions, 2));
 
     // Get the minimum dimension.
     self->sim.grid.minstepsize = MIN(1.0 / self->sim.grid.stepr.x,
@@ -542,14 +531,11 @@ pypmc_get_tissues( PyPMC *self, void *closure )
 static PyObject*
 pypmc_get_grid_dimensions( PyPMC *self, void *closure )
 {
-    PyObject *dim_x, *dim_y, *dim_z;
     PyObject *dimensions;
 
-    dim_x = Py_BuildValue("(if)", self->sim.grid.dim.x, 1.0 / self->sim.grid.stepr.x);
-    dim_y = Py_BuildValue("(if)", self->sim.grid.dim.y, 1.0 / self->sim.grid.stepr.y);
-    dim_z = Py_BuildValue("(if)", self->sim.grid.dim.z, 1.0 / self->sim.grid.stepr.z);
-
-    dimensions = Py_BuildValue("(NNN)", dim_x, dim_y, dim_z);
+    dimensions = Py_BuildValue("(fff)", 1.0 / self->sim.grid.stepr.x,
+                                        1.0 / self->sim.grid.stepr.y,
+                                        1.0 / self->sim.grid.stepr.z);
 
     return dimensions;
 }
