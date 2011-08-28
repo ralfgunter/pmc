@@ -323,4 +323,6 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
         cudaFree(d_seed);
         d_seed = temp_seed;
     }
+
+    cudaFree(temp_seed);
 }

@@ -24,7 +24,7 @@ obj/%.o: %.cu
 pmc: $(OBJ)
 	nvcc $(LINK_FLAGS) $(OBJ) -o pmc 
 
-debug: NVCC_FLAGS += -DDEBUG -g -G -use_fast_math -Xptxas="-v"
+debug: NVCC_FLAGS += -DDEBUG -g -G -O0 -Xptxas="-v"
 debug: LINK_FLAGS += -g -G
 debug: pmc 
 
