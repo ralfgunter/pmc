@@ -252,6 +252,7 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     }
 }
 
+/*
 // Make sure the source is at an interface.
 void correct_source(Simulation *sim)
 {
@@ -277,6 +278,7 @@ void correct_source(Simulation *sim)
         MOVE(p, r0, sim->grid.stepr);
         media_idx = sim->grid.media_type[p.x][p.y][p.z];
     }
+
     while( media_idx == 0 &&
            p.x > 0 && p.x < sim->grid.dim.x &&
            p.y > 0 && p.y < sim->grid.dim.y &&
@@ -294,6 +296,7 @@ void correct_source(Simulation *sim)
     sim->src.r.y = r0.y;
     sim->src.r.z = r0.z;
 }
+*/
 
 void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
 {
