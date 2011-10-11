@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     printf("photons = %d\n", sim.n_photons);
 
     // Make sure the source is at an interface.
-    correct_source(&sim);
+    //correct_source(&sim);
 
     // Allocate and initialize memory to be used by the GPU.
     printf("Ready to copy a bunch of data!\n");

@@ -58,7 +58,7 @@ pypmc_init( PyPMC *self, PyObject *args )
     parse_conf(&self->conf, n_threads, n_iterations);
 
     // Make sure the source is at an interface.
-    correct_source(&self->sim);
+    //correct_source(&self->sim);
 
     // Allocate and initialize memory to be used by the GPU.
     init_mem(self->conf, &self->sim, &self->gmem);
@@ -244,7 +244,9 @@ pypmc_set_src_pos( PyPMC *self, PyObject *coords, void *closure )
     self->sim.src.r.y = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 1));
     self->sim.src.r.z = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 2));
 
-    correct_source(&self->sim);
+    // The source doesn't necessarily have to be at an interface, though for
+    // some applications, such as brain imaging, it usually is.
+    //correct_source(&self->sim);
 
     return 0;
 }
