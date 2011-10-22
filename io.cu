@@ -221,7 +221,6 @@ int write_results(Simulation sim, const char *input_filename)
     int media_idx;
     uint32_t photon_idx, k;
 
-    // TODO: check for errors
     sprintf(filename, "%s.his", input_filename);
     history = fopen(filename, "wb");
     if( history == NULL ) {
@@ -240,7 +239,8 @@ int write_results(Simulation sim, const char *input_filename)
             if( (det_idx = sim.det.hit[photon_idx]) != 0 )
             {
                 // Write to the history file
-                fwrite(&(--det_idx), sizeof(int), 1, history);
+                int d = det_idx - 1;
+                fwrite(&d, sizeof(int), 1, history);
                 for( media_idx = 1; media_idx <= sim.tiss.num; media_idx++ )
                 {
                     k = MAD_IDX(photon_idx, media_idx);
