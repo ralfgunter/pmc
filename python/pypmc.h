@@ -4,7 +4,7 @@
 #include <Python.h>
 #include "structmember.h"
 #include "main.h"
-#define PY_ARRAY_UNIQUE_SYMBOL cool_ARRAY_API
+#define PY_ARRAY_UNIQUE_SYMBOL pmc_ARRAY_API
 #include <numpy/arrayobject.h>
 
 #if PYTHON == 2
@@ -22,6 +22,11 @@ typedef struct {
 
     PyObject *py_path_length, *py_momentum_transfer;
     PyArrayObject *py_fluence;
+
+    struct {
+        int num;
+        Source *info;
+    } srcs;
 
     ExecConfig conf;
     Simulation sim;

@@ -38,18 +38,11 @@ uint32_t* init_rand_seed(int seed, ExecConfig conf)
     return d_seed;
 }
 
-void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
+void init_params_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 {
-    float *d_fbox;
-    float *d_path_length, *d_mom_transfer;
-    float *d_temp_path_length, *d_temp_mom_transfer;
-    float *h_temp_tissueArrays;
     uint8_t *h_linear_media_type, *d_media_type;
-    int8_t *d_det_hit;
-    uint32_t *d_seed;
     int4 *d_det_loc;
     float4 *d_media_prop;
-    size_t num_temp_tissueArrays, num_tissueArrays, num_fbox;
 
     // Calculate the total number of voxel elements.
     int grid_dim = sim->grid.dim.x * sim->grid.dim.y * sim->grid.dim.z;
@@ -58,6 +51,36 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     h_linear_media_type = (uint8_t *) malloc(grid_dim * sizeof(uint8_t));
     linearize_3d(sim->grid.media_type, h_linear_media_type,
                  sim->grid.dim.x, sim->grid.dim.y, sim->grid.dim.z);
+
+    // Allocate memory on the GPU global memory.
+    DEV_ALLOC(&d_det_loc, MAX_DETECTORS * sizeof(int4));
+    DEV_ALLOC(&d_media_prop, (MAX_TISSUES + 1) * sizeof(float4));
+    DEV_ALLOC(&d_media_type, grid_dim * sizeof(uint8_t));
+
+    // Copy simulation memory to the GPU.
+    //cudaMemcpyToSymbol("det_loc", sim->det.info, sim->det.num * sizeof(int4));
+    //cudaMemcpyToSymbol("media_prop", sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
+    TO_DEVICE(d_det_loc, sim->det.info, MAX_DETECTORS * sizeof(int4));
+    TO_DEVICE(d_media_prop, sim->tiss.prop, (MAX_TISSUES + 1) * sizeof(float4));
+    TO_DEVICE(d_media_type, h_linear_media_type, grid_dim * sizeof(uint8_t));
+
+    // Update GPU memory structure (so that its pointers can be used elsewhere).
+    gmem->det_loc = d_det_loc;
+    gmem->media_prop = d_media_prop;
+    gmem->media_type = d_media_type;
+
+    // Free temporary memory used on the host.
+    free(h_linear_media_type);
+}
+
+void init_results_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
+{
+    float *d_fbox;
+    float *d_path_length, *d_mom_transfer;
+    float *d_temp_path_length, *d_temp_mom_transfer;
+    float *h_temp_tissueArrays;
+    int8_t *d_det_hit;
+    size_t num_temp_tissueArrays, num_tissueArrays, num_fbox;
 
     // Setup the path length and momentum transfer arrays.
     //num_tissueArrays = (sim->tiss.num + 1) * sim->n_photons;
@@ -74,13 +97,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     // Array of which photons hit which detectors (if any).
     sim->det.hit = (int8_t *) calloc(sim->n_photons, sizeof(int8_t));
 
-    // Array of seeds for the GPU random number generator.
-    d_seed = init_rand_seed(conf.rand_seed, conf);
-
     // Allocate memory on the GPU global memory.
-    DEV_ALLOC(&d_det_loc, MAX_DETECTORS * sizeof(int4));
-    DEV_ALLOC(&d_media_prop, (MAX_TISSUES + 1) * sizeof(float4));
-    DEV_ALLOC(&d_media_type, grid_dim * sizeof(uint8_t));
     DEV_ALLOC(&d_path_length,  num_tissueArrays * sizeof(float));
     DEV_ALLOC(&d_mom_transfer, num_tissueArrays * sizeof(float));
     DEV_ALLOC(&d_fbox, num_fbox * sizeof(float));
@@ -88,27 +105,7 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     DEV_ALLOC(&d_temp_path_length, num_temp_tissueArrays * sizeof(float));
     DEV_ALLOC(&d_temp_mom_transfer, num_temp_tissueArrays * sizeof(float));
 
-#ifdef DEBUG
-    int gpu_mem_spent = sizeof(int4) * MAX_DETECTORS
-                      + sizeof(float4) * (MAX_TISSUES + 1)
-                      + sizeof(uint8_t) * grid_dim
-                      + sizeof(float) * num_tissueArrays
-                      + sizeof(float) * num_tissueArrays
-                      + sizeof(float) * num_fbox
-                      + sizeof(int8_t) * sim->n_photons
-                      + sizeof(float) * num_temp_tissueArrays
-                      + sizeof(float) * num_temp_tissueArrays
-                      + sizeof(uint32_t) * conf.n_threads * RAND_SEED_LEN;
-    printf("memory spent = %dMB\n", gpu_mem_spent / (1024 * 1024));
-#endif
-
     // Copy simulation memory to the GPU.
-    //cudaMemcpyToSymbol("det_loc", sim->det.info, sim->det.num * sizeof(int4));
-    //cudaMemcpyToSymbol("media_prop", sim->tiss.prop, (sim->tiss.num + 1) * sizeof(float4));
-    cutilSafeCall(cudaMemcpyToSymbol("s", sim, sizeof(Simulation)));
-    TO_DEVICE(d_det_loc, sim->det.info, MAX_DETECTORS * sizeof(int4));
-    TO_DEVICE(d_media_prop, sim->tiss.prop, (MAX_TISSUES + 1) * sizeof(float4));
-    TO_DEVICE(d_media_type, h_linear_media_type, grid_dim * sizeof(uint8_t));
     TO_DEVICE(d_path_length, sim->path_length, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_mom_transfer, sim->mom_transfer, num_tissueArrays * sizeof(float));
     TO_DEVICE(d_fbox, sim->fbox, num_fbox * sizeof(float));
@@ -117,21 +114,39 @@ void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     TO_DEVICE(d_temp_mom_transfer, h_temp_tissueArrays, num_temp_tissueArrays * sizeof(float));
 
     // Update GPU memory structure (so that its pointers can be used elsewhere).
-    gmem->det_loc = d_det_loc;
-    gmem->media_prop = d_media_prop;
-    gmem->media_type = d_media_type;
     gmem->path_length = d_path_length;
     gmem->mom_transfer = d_mom_transfer;
     gmem->fbox = d_fbox;
     gmem->det_hit = d_det_hit;
-    gmem->seed = d_seed;
     gmem->temp_path_length = d_temp_path_length;
     gmem->temp_mom_transfer = d_temp_mom_transfer;
-    cutilSafeCall(cudaMemcpyToSymbol("g", gmem, sizeof(GPUMemory)));
 
     // Free temporary memory used on the host.
-    free(h_linear_media_type);
     free(h_temp_tissueArrays);
+}
+
+void copy_mem_symbols(Simulation *sim, GPUMemory *gmem)
+{
+    cutilSafeCall(cudaMemcpyToSymbol("s", sim, sizeof(Simulation)));
+    cutilSafeCall(cudaMemcpyToSymbol("g", gmem, sizeof(GPUMemory)));
+}
+
+void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
+{
+    init_params_mem(conf, sim, gmem);
+    init_results_mem(conf, sim, gmem);
+    copy_mem_symbols(sim, gmem);
+}
+
+void free_gpu_results_mem_except_fluence(GPUMemory gmem)
+{
+    // Path length and momentum transfer.
+    cutilSafeCall(cudaFree(gmem.path_length));
+    cutilSafeCall(cudaFree(gmem.mom_transfer));
+    cutilSafeCall(cudaFree(gmem.temp_path_length));
+    cutilSafeCall(cudaFree(gmem.temp_mom_transfer));
+
+    cutilSafeCall(cudaFree(gmem.det_hit));
 }
 
 void free_gpu_results_mem(GPUMemory gmem)
@@ -158,11 +173,6 @@ void free_gpu_params_mem(GPUMemory gmem)
 
     // Optical properties of the different tissue types.
     cutilSafeCall(cudaFree(gmem.media_prop));
-
-    // Random number generation.
-    // By a design mistake, this will most likely already be freed by the time
-    // the python runtime does the cleaning up.
-    cudaFree(gmem.seed);
 }
 
 void free_cpu_results_mem(Simulation sim)

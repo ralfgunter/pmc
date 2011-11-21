@@ -22,6 +22,9 @@ pypmc_dealloc( PyPMC *self )
     Py_XDECREF(self->py_momentum_transfer);
     Py_XDECREF(self->py_fluence);
 
+    // If the sources array has already been set, then we delete it.
+    if (self->srcs.info != NULL) free(self->srcs.info);
+
     // Finally, delete the pypmc object itself.
 #if PYTHON == 3
     Py_TYPE(self)->tp_free((PyObject *) self);
@@ -82,38 +85,58 @@ pypmc_write_to_disk( PyPMC *self, PyObject *args )
     Py_RETURN_NONE;
 }
 
-static PyObject *
-pypmc_run( PyPMC *self, PyObject *args )
+void
+pull_fluence( PyPMC *self )
 {
-    // Allocate and initialize memory to be used by the GPU.
-    free_gpu_params_mem(self->gmem);
-    free_gpu_results_mem(self->gmem);
-    free_cpu_results_mem(self->sim);
-    init_mem(self->conf, &self->sim, &self->gmem);
-
-    // Run simulations on the GPU.
-    simulate(self->conf, self->sim, self->gmem);
-
-    Py_RETURN_NONE;
+    Py_XDECREF(self->py_fluence);
+    self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.fbox);
 }
 
-static PyObject *
-pypmc_pull_results( PyPMC *self, PyObject *args )
+void
+pull_tissueArrays( PyPMC *self )
 {
+    PyObject *path_length, *momentum_transfer;
+
     // Retrieve results to host.
     retrieve(&self->sim, &self->gmem);
 
+    path_length = pypmc_get_tissueArray(self->sim, self->sim.path_length);
+    momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.mom_transfer);
+
+    PyList_Append(self->py_path_length, path_length);
+    PyList_Append(self->py_momentum_transfer, momentum_transfer);
+}
+
+static PyObject *
+pypmc_run( PyPMC *self, PyObject *args )
+{
     Py_XDECREF(self->py_path_length);
     Py_XDECREF(self->py_momentum_transfer);
     Py_XDECREF(self->py_fluence);
 
-    self->py_path_length = pypmc_get_tissueArray(self->sim, self->sim.path_length);
-    self->py_momentum_transfer = pypmc_get_tissueArray(self->sim, self->sim.mom_transfer);
-    self->py_fluence = pypmc_fluence_to_ndarray(self->sim, self->sim.fbox);
+    self->py_path_length = Py_BuildValue("[]");
+    self->py_momentum_transfer = Py_BuildValue("[]");
 
-    // We won't need the C results anymore, as everything is available as
-    // python objects.
-    //free_cpu_results_mem(self->sim);
+    init_params_mem(self->conf, &self->sim, &self->gmem);
+
+    // Run simulations on the GPU, once for each source.
+    for (int n = 0; n < self->srcs.num; ++n) {
+        // Determine which source we're simulating now.
+        self->sim.src.r = self->srcs.info[n].r;
+        self->sim.src.d = self->srcs.info[n].d;
+        self->sim.src.lambda = self->srcs.info[n].lambda;
+
+        // Allocate and initialize memory to be used by the GPU.
+        free_gpu_results_mem_except_fluence(self->gmem);    // TODO: erm...
+        free_cpu_results_mem(self->sim);
+        init_results_mem(self->conf, &self->sim, &self->gmem);
+        copy_mem_symbols(&self->sim, &self->gmem);
+
+        simulate(self->conf, self->sim, self->gmem);
+        pull_tissueArrays(self);
+    }
+
+    pull_fluence(self);
 
     Py_RETURN_NONE;
 }
@@ -231,51 +254,64 @@ pypmc_set_n_photons( PyPMC *self, PyObject *value, void *closure )
 }
 
 static int
-pypmc_set_src_pos( PyPMC *self, PyObject *coords, void *closure )
+pypmc_set_srcs( PyPMC *self, PyObject *src_list, void *closure )
 {
-    if (! (PyTuple_Check(coords) && PyTuple_Size(coords) == 3))
-    {
-        PyErr_SetString(PyExc_TypeError,
-                        "The source position must be a tuple with three elements");
-        return -1;
-    }
-
-    self->sim.src.r.x = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 0));
-    self->sim.src.r.y = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 1));
-    self->sim.src.r.z = (float) PyFloat_AsDouble(PyTuple_GetItem(coords, 2));
-
-    // The source doesn't necessarily have to be at an interface, though for
-    // some applications, such as brain imaging, it usually is.
-    //correct_source(&self->sim);
-
-    return 0;
-}
-
-static int
-pypmc_set_src_dir( PyPMC *self, PyObject *dir_cosines, void *closure )
-{
+    PyObject *entry, *position, *direction;
     float3 src_dir;
 
-    if (! (PyTuple_Check(dir_cosines) && PyTuple_Size(dir_cosines) == 3))
+    if (! PyList_Check(src_list))
     {
-        PyErr_SetString(PyExc_TypeError,
-                        "The source direction must be a tuple with three elements");
+        PyErr_SetString(PyExc_TypeError, "The sources attribute must be a list");
         return -1;
     }
 
-    src_dir.x = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 0));
-    src_dir.y = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 1));
-    src_dir.z = (float) PyFloat_AsDouble(PyTuple_GetItem(dir_cosines, 2));
+    // Each entry in the list corresponds to a simulation with a given source.
+    Py_ssize_t num_sources = PyList_GET_SIZE(src_list);
+    self->srcs.num = num_sources;
 
-    // Normalize the direction cosine of the source.
-    float foo = sqrt(src_dir.x*src_dir.x + src_dir.y*src_dir.y + src_dir.z*src_dir.z);
-    src_dir.x /= foo;
-    src_dir.y /= foo;
-    src_dir.z /= foo;
+    // The old source list must be freed, and a new one built in its place.
+    free(self->srcs.info);
+    self->srcs.info = (Source *) malloc(num_sources * sizeof(Source));
+    if (self->srcs.info == NULL) {
+        PyErr_SetString(PyExc_MemoryError, "Could not allocate sources list\n");
+        return -1;
+    }
 
-    self->sim.src.d.x = src_dir.x;
-    self->sim.src.d.y = src_dir.y;
-    self->sim.src.d.z = src_dir.z;
+    for (Py_ssize_t n = 0; n < num_sources; ++n) {
+        entry = PyList_GET_ITEM(src_list, n);
+
+        // First, we get the source position.
+        position = PyList_GetItem(entry, 0);
+        self->srcs.info[n].r.x = (float) PyFloat_AsDouble(PyTuple_GetItem(position, 0));
+        self->srcs.info[n].r.y = (float) PyFloat_AsDouble(PyTuple_GetItem(position, 1));
+        self->srcs.info[n].r.z = (float) PyFloat_AsDouble(PyTuple_GetItem(position, 2));
+
+        // The source doesn't necessarily have to be at an interface, though for
+        // some applications, such as brain imaging, it usually is.
+        //correct_source(&self->sim[n]);
+
+
+        // Then, its direction cosines.
+        direction = PyList_GetItem(entry, 1);
+        src_dir.x = (float) PyFloat_AsDouble(PyTuple_GetItem(direction, 0));
+        src_dir.y = (float) PyFloat_AsDouble(PyTuple_GetItem(direction, 1));
+        src_dir.z = (float) PyFloat_AsDouble(PyTuple_GetItem(direction, 2));
+
+        // Normalize the direction cosine of the source.
+        float foo = sqrt(src_dir.x*src_dir.x + src_dir.y*src_dir.y + src_dir.z*src_dir.z);
+        src_dir.x /= foo;
+        src_dir.y /= foo;
+        src_dir.z /= foo;
+
+        self->srcs.info[n].d.x = src_dir.x;
+        self->srcs.info[n].d.y = src_dir.y;
+        self->srcs.info[n].d.z = src_dir.z;
+
+
+        // Finally, its wavelength.
+        self->srcs.info[n].lambda = (float) PyFloat_AsDouble(PyList_GetItem(entry, 2));
+    }
+
 
     return 0;
 }
@@ -471,23 +507,29 @@ pypmc_get_n_photons( PyPMC *self, void *closure )
 }
 
 static PyObject*
-pypmc_get_src_pos( PyPMC *self, void *closure )
-{
-    PyObject *coords = Py_BuildValue("(fff)", self->sim.src.r.x,
-                                              self->sim.src.r.y,
-                                              self->sim.src.r.z);
+pypmc_get_srcs( PyPMC *self, void *closure ) {
+    PyObject *entry, *coords, *direction;
+    PyObject *src_list = Py_BuildValue("[]");
 
-    return coords;
-}
+    for (int i = 0; i < self->sim.det.num; ++i)
+    {
+        coords = Py_BuildValue("(fff)", self->srcs.info[i].r.x,
+                                        self->srcs.info[i].r.y,
+                                        self->srcs.info[i].r.z);
 
-static PyObject*
-pypmc_get_src_dir( PyPMC *self, void *closure )
-{
-    PyObject *direction = Py_BuildValue("(fff)", self->sim.src.d.x,
-                                                 self->sim.src.d.y,
-                                                 self->sim.src.d.z);
+        direction = Py_BuildValue("(fff)", self->srcs.info[i].d.x,
+                                           self->srcs.info[i].d.y,
+                                           self->srcs.info[i].d.z);
 
-    return direction;
+        entry = Py_BuildValue("[NNf]", coords,
+                                       direction,
+                                       self->srcs.info[i].lambda);
+
+        PyList_Append(src_list, entry);
+        Py_DECREF(entry);
+    }
+
+    return src_list;
 }
 
 static PyObject*
@@ -627,12 +669,9 @@ static PyGetSetDef pypmc_getsetters[] = {
     {"n_photons",
      (getter) pypmc_get_n_photons, (setter) pypmc_set_n_photons, 
      "number of photons simulated", NULL},
-    {"src_pos",
-     (getter) pypmc_get_src_pos, (setter) pypmc_set_src_pos, 
-     "euclidean position of the source (automatically corrected to be at an interface)", NULL},
-    {"src_dir",
-     (getter) pypmc_get_src_dir, (setter) pypmc_set_src_dir, 
-     "direction cosines of the source", NULL},
+    {"srcs",
+     (getter) pypmc_get_srcs, (setter) pypmc_set_srcs,
+     "set the position, direction, and wavelength of each source", NULL},
     {"detectors",
      (getter) pypmc_get_detectors, (setter) pypmc_set_detectors, 
      "list of detectors (their position and radius)", NULL},
@@ -667,8 +706,6 @@ static PyMemberDef pypmc_members[] = {
 static PyMethodDef pypmc_methods[] = {
     {"run_simulation", (PyCFunction) pypmc_run, METH_NOARGS,
      "Does what it says on the tin."},
-    {"pull_results", (PyCFunction) pypmc_pull_results, METH_NOARGS,
-     "Transfers the simulation results to the host memory."},
     {"write_to_disk", (PyCFunction) pypmc_write_to_disk, METH_VARARGS,
      "Saves the simulation results to disk, the old-fashioned way."},
     {"load_medium", (PyCFunction) pypmc_load_medium, METH_VARARGS,

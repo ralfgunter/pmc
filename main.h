@@ -60,13 +60,12 @@
 #endif
 
 // From the CUDA SDK
-// TODO: Perhaps this would be better off on util.cu?
-#define cutilSafeCall(err) __cudaSafeCall(err, __FILE__, __LINE__)
+#define cutilSafeCall(err) __cudaSafeCall((err), __FILE__, __LINE__)
 inline void __cudaSafeCall( cudaError err, const char *file, const int line )
 {
-    if( cudaSuccess != err) {
-        fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s.\n",
-                file, line, (int)err, cudaGetErrorString( err ) );
+    if(err != cudaSuccess) {
+        fprintf(stderr, "%s(%i) : cutilSafeCall() Runtime API error %d: %s.\n",
+                file, line, (int) err, cudaGetErrorString( err ) );
         exit(-1);
     }
 }
@@ -86,8 +85,9 @@ typedef struct {
 } Grid;
 
 typedef struct {
-    float4 r;   // initial position of the photon (euclidean)
-    float4 d;   // initial direction cosines 
+    float4 r;     // initial position of the photon (euclidean)
+    float4 d;     // initial direction cosines 
+    float lambda; // laser wavelength
 } Source;
 
 typedef struct {
@@ -137,9 +137,6 @@ typedef struct {
 
     // Detector hit by a given photon.
     int8_t *det_hit;
-
-    // Seed for the random number generator.
-    uint32_t *seed;
 } GPUMemory;
 
 typedef struct {
@@ -148,21 +145,30 @@ typedef struct {
     int rand_seed;
 } ExecConfig;
 
+
 // Function prototypes
 int read_input(ExecConfig *conf, Simulation *sim, const char *input_filename);
 int write_results(Simulation sim, const char *input_filename);
 int read_segmentation_file(Simulation *sim, const char *filename);
+
+uint32_t* init_rand_seed(int seed, ExecConfig conf);
 void init_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
+void init_results_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
+void init_params_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem);
+void copy_mem_symbols(Simulation *sim, GPUMemory *gmem);
+
 void free_mem(Simulation sim, GPUMemory gmem); 
 void free_cpu_params_mem(Simulation sim); 
 void free_gpu_params_mem(GPUMemory gmem); 
 void free_cpu_results_mem(Simulation sim); 
 void free_gpu_results_mem(GPUMemory gmem); 
+void free_gpu_results_mem_except_fluence(GPUMemory gmem); 
+
 void retrieve(Simulation *sim, GPUMemory *gmem);
-void correct_source(Simulation *sim);
 void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
+
 void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
-uint32_t* init_rand_seed(int seed, ExecConfig conf);
 void linearize_3d(uint8_t ***t, uint8_t *l, int dim_x, int dim_y, int dim_z);
+
 
 #endif // _MAIN_H_

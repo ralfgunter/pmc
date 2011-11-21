@@ -312,13 +312,13 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem)
 #endif
 
     seed = conf.rand_seed;
-    d_seed = gmem.seed;
+    d_seed = init_rand_seed(seed, conf);
     for(iteration = 0; iteration < conf.n_iterations; iteration++)
     {
         run_simulation<<< conf.n_blocks, 128 >>>(d_seed, photons_per_thread, iteration);
 
         // Order a new batch of RNG seeds while the current iteration is being simulated.
-        temp_seed = init_rand_seed(seed++, conf);
+        temp_seed = init_rand_seed(++seed, conf);
 
         // Make sure all photons have already been simulated before moving on.
         cudaThreadSynchronize();
