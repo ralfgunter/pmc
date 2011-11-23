@@ -11,8 +11,13 @@
 *                                                                               *
 ********************************************************************************/
 
+#include "math.h"
 #include "main.h"
 #include "logistic_rand_kernel.h"
+
+#define LAMBDA_0 250 // nm
+#define A 1500.2f // 1/cm
+#define B 0.8278f
 
 #define MOVE(p, r, stepr) \
         (p).x = (r).x * (stepr).x; \
@@ -95,11 +100,32 @@ __global__ void run_simulation(uint32_t *seed, int photons_per_thread, int itera
     {
         det_loc[threadIdx.x] = g.det_loc[threadIdx.x];
         det_loc[2*threadIdx.x] = g.det_loc[2*threadIdx.x];
-        media_prop[threadIdx.x] = g.media_prop[threadIdx.x];
+
+        // Scattering coefficient (mu_s)
+        // TODO: check units
+        media_prop[threadIdx.x].x = A * pow(s.src.lambda, -B);
+
+        // The absorption coefficient is calculated as thus:
+        //   mu_a = e_1(l)*c_1 + e_2(l)*c_2
+        // where
+        //   e_1(l) - extinction coefficient for deoxyhemoglobin
+        //   e_2(l) - extinction coefficient for oxyhemoglobin
+        //   c_1 - concentration of deoxyhemoglobin on the tissue
+        //   c_2 - concentration of oxyhemoglobin on the tissue
+        // Texture starts at LAMBDA_0 = 250
+        media_prop[threadIdx.x].y = tex1Dfetch(hb_extinction,   s.src.lambda - LAMBDA_0) * g.media_prop[threadIdx.x].x
+                                  + tex1Dfetch(hbo2_extinction, s.src.lambda - LAMBDA_0) * g.media_prop[threadIdx.x].y;
+
+        // Anisotropy
+        media_prop[threadIdx.x].z = g.media_prop[threadIdx.x].z; 
+
+        // Refractive index (not yet used).
+        media_prop[threadIdx.x].w = g.media_prop[threadIdx.x].w; 
     }
     __syncthreads();
 
     gpu_rng_init(t, tnew, seed, thread_idx);
+
 
     int photons_run = 0;
     while(photons_run < photons_per_thread)

@@ -381,7 +381,7 @@ pypmc_set_tissues( PyPMC *self, PyObject *tissue_list, void *closure )
     {
         entry = PyList_GetItem(tissue_list, i);
 
-        self->sim.tiss.prop[i + 1].x = (float) 1.0 / PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
+        self->sim.tiss.prop[i + 1].x = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 0));
         self->sim.tiss.prop[i + 1].y = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 1));
         self->sim.tiss.prop[i + 1].z = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 2));
         self->sim.tiss.prop[i + 1].w = (float) PyFloat_AsDouble(PyTuple_GetItem(entry, 3));
@@ -560,10 +560,10 @@ pypmc_get_tissues( PyPMC *self, void *closure )
 
     for (int i = 1; i <= self->sim.tiss.num; ++i)
     {
-        entry = Py_BuildValue("(ffff)", 1.0 / self->sim.tiss.prop[i].x,
-                                              self->sim.tiss.prop[i].y,
-                                              self->sim.tiss.prop[i].z,
-                                              self->sim.tiss.prop[i].w);
+        entry = Py_BuildValue("(ffff)", self->sim.tiss.prop[i].x,
+                                        self->sim.tiss.prop[i].y,
+                                        self->sim.tiss.prop[i].z,
+                                        self->sim.tiss.prop[i].w);
 
         PyList_Append(tissue_list, entry);
         Py_DECREF(entry);

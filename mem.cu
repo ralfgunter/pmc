@@ -12,6 +12,7 @@
 ********************************************************************************/
 
 #include "main.h"
+#include "extinction_coeff.h"
 
 uint32_t* init_rand_seed(int seed, ExecConfig conf)
 {
@@ -42,6 +43,7 @@ void init_params_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
 {
     uint8_t *h_linear_media_type, *d_media_type;
     int4 *d_det_loc;
+    float *d_hb_excoeff, *d_hbo2_excoeff;
     float4 *d_media_prop;
 
     // Calculate the total number of voxel elements.
@@ -56,6 +58,8 @@ void init_params_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     DEV_ALLOC(&d_det_loc, MAX_DETECTORS * sizeof(int4));
     DEV_ALLOC(&d_media_prop, (MAX_TISSUES + 1) * sizeof(float4));
     DEV_ALLOC(&d_media_type, grid_dim * sizeof(uint8_t));
+    DEV_ALLOC(&d_hb_excoeff,   NUM_LAMBDAS * sizeof(float));
+    DEV_ALLOC(&d_hbo2_excoeff, NUM_LAMBDAS * sizeof(float));
 
     // Copy simulation memory to the GPU.
     //cudaMemcpyToSymbol("det_loc", sim->det.info, sim->det.num * sizeof(int4));
@@ -63,11 +67,18 @@ void init_params_mem(ExecConfig conf, Simulation *sim, GPUMemory *gmem)
     TO_DEVICE(d_det_loc, sim->det.info, MAX_DETECTORS * sizeof(int4));
     TO_DEVICE(d_media_prop, sim->tiss.prop, (MAX_TISSUES + 1) * sizeof(float4));
     TO_DEVICE(d_media_type, h_linear_media_type, grid_dim * sizeof(uint8_t));
+    TO_DEVICE(d_hb_excoeff,   hb,   NUM_LAMBDAS * sizeof(float));
+    TO_DEVICE(d_hbo2_excoeff, hbo2, NUM_LAMBDAS * sizeof(float));
+
+    cutilSafeCall(cudaBindTexture(NULL, hb_extinction,   d_hb_excoeff,   NUM_LAMBDAS * sizeof(float)));
+    cutilSafeCall(cudaBindTexture(NULL, hbo2_extinction, d_hbo2_excoeff, NUM_LAMBDAS * sizeof(float)));
 
     // Update GPU memory structure (so that its pointers can be used elsewhere).
     gmem->det_loc = d_det_loc;
     gmem->media_prop = d_media_prop;
     gmem->media_type = d_media_type;
+    gmem->hb_excoeff   = d_hb_excoeff;
+    gmem->hbo2_excoeff = d_hbo2_excoeff;
 
     // Free temporary memory used on the host.
     free(h_linear_media_type);
@@ -173,6 +184,12 @@ void free_gpu_params_mem(GPUMemory gmem)
 
     // Optical properties of the different tissue types.
     cutilSafeCall(cudaFree(gmem.media_prop));
+
+    // Extinction coefficient for (deoxy-)hemoglobin.
+    cutilSafeCall(cudaUnbindTexture(hb_extinction));
+    cutilSafeCall(cudaUnbindTexture(hbo2_extinction));
+    cutilSafeCall(cudaFree(gmem.hb_excoeff));
+    cutilSafeCall(cudaFree(gmem.hbo2_excoeff));
 }
 
 void free_cpu_results_mem(Simulation sim)

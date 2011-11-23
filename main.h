@@ -137,6 +137,8 @@ typedef struct {
 
     // Detector hit by a given photon.
     int8_t *det_hit;
+
+    float *hb_excoeff, *hbo2_excoeff;
 } GPUMemory;
 
 typedef struct {
@@ -170,5 +172,7 @@ void simulate(ExecConfig conf, Simulation sim, GPUMemory gmem);
 void parse_conf(ExecConfig *conf, int n_threads, int n_iterations);
 void linearize_3d(uint8_t ***t, uint8_t *l, int dim_x, int dim_y, int dim_z);
 
+texture<float> hb_extinction;
+texture<float> hbo2_extinction;
 
 #endif // _MAIN_H_
